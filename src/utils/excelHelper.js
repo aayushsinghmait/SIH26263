@@ -40,83 +40,99 @@ export function exportToExcel(data, fileName = 'Export.xlsx', sheetName = 'Data'
 }
 
 /**
- * Download sample template for Application Submissions
+ * Download sample template for Student Enrollment Batch Submissions
  */
 export function downloadApplicationTemplate() {
   const sampleData = [
     {
-      Application_ID: 'APP-2026-905',
-      Applicant_Name: 'Suresh Patel',
-      Date_of_Birth: '1994-07-25',
+      Student_ID: 'STU-2026-905',
+      Student_Name: 'Suresh Patel',
+      APAAR_ID: '9876-5432-1098',
+      Enrollment_No: '2026/CS/084',
+      Course: 'B.Tech Computer Science and Engineering',
+      Branch: 'Computer Science',
+      Approved_Intake: 120,
+      Actual_Enrolment: 118,
+      Supernumerary_Seats: 'NO',
+      NRI_Category: 'NO',
+      OCI_Status: 'NO',
+      Foreign_National: 'NO',
+      Date_of_Birth: '2004-07-25',
       Gender: 'Male',
       Father_Name: 'Ramesh Patel',
-      Aadhaar_No: '9876-5432-1098',
-      PAN_No: 'ABCDE1234F',
-      Education_Roll: '2016-BTECH-098',
-      Claimed_Income: '9,50,000',
-      State: 'Uttar Pradesh',
-      Pin_Code: '201301'
+      Institution_Code: 'IITD',
+      State: 'Delhi',
+      Pin_Code: '110016'
     },
     {
-      Application_ID: 'APP-2026-906',
-      Applicant_Name: 'Neha Verma',
-      Date_of_Birth: '1999-03-18',
+      Student_ID: 'STU-2026-906',
+      Student_Name: 'Neha Verma',
+      APAAR_ID: '2345-6789-0123',
+      Enrollment_No: '2026/EE/102',
+      Course: 'B.Tech Electrical Engineering',
+      Branch: 'Electrical Engineering',
+      Approved_Intake: 180,
+      Actual_Enrolment: 175,
+      Supernumerary_Seats: 'YES',
+      NRI_Category: 'YES',
+      OCI_Status: 'NO',
+      Foreign_National: 'NO',
+      Date_of_Birth: '2003-03-18',
       Gender: 'Female',
       Father_Name: 'Ashok Verma',
-      Aadhaar_No: '2345-6789-0123',
-      PAN_No: 'BKAPR4321Q',
-      Education_Roll: '2019-BCOM-441',
-      Claimed_Income: '5,00,000',
-      State: 'West Bengal',
-      Pin_Code: '700019'
+      Institution_Code: 'BITS',
+      State: 'Rajasthan',
+      Pin_Code: '333031'
     }
   ];
-  exportToExcel(sampleData, 'GovVerify_Applications_Batch_Template.xlsx', 'Applications');
+  exportToExcel(sampleData, 'AICTE_Student_Enrollment_Batch_Template.xlsx', 'StudentEnrollment');
 }
 
 /**
- * Download sample template for Ministry Reference Dataset Upload
+ * Download sample template for Institution Student Registry Upload
  */
-export function downloadMinistryDatasetTemplate(ministryCode = 'UIDAI') {
-  let sampleData = [];
-  if (ministryCode === 'UIDAI') {
-    sampleData = [
-      {
-        aadhaar_no: '1122-3344-5566',
-        full_name: 'Amitabh Sen',
-        dob: '1992-05-10',
-        gender: 'Male',
-        father_name: 'Bimal Sen',
-        state: 'Assam',
-        pin_code: '781001',
-        biometric_status: 'VERIFIED',
-        status: 'ACTIVE'
-      }
-    ];
-  } else if (ministryCode === 'CBDT') {
-    sampleData = [
-      {
-        pan_no: 'XYZAB9988C',
-        full_name: 'Amitabh Sen',
-        dob: '1992-05-10',
-        aadhaar_linked: '1122-3344-5566',
-        income_slab: '8L - 10L',
-        itr_status: 'FILED_FY25',
-        status: 'VALID'
-      }
-    ];
-  } else {
-    sampleData = [
-      {
-        record_id: 'REC-001',
-        entity_name: 'Sample Entity',
-        reference_id: 'REF-9988',
-        issue_date: '2025-01-01',
-        status: 'VALID'
-      }
-    ];
-  }
-  exportToExcel(sampleData, `${ministryCode}_Reference_Dataset_Template.xlsx`, 'RegistryData');
+export function downloadMinistryDatasetTemplate(institutionCode = 'IITD') {
+  const sampleData = [
+    {
+      apaar_id: '9012-3456-7890',
+      student_name: 'Ananya Sharma',
+      enrollment_no: '2026/CS/084',
+      course: 'B.Tech Computer Science and Engineering',
+      branch: 'Computer Science',
+      approved_intake: 120,
+      actual_enrolment: 118,
+      supernumerary_seats: 'NO',
+      nri_category: 'NO',
+      oci_status: 'NO',
+      foreign_national: 'NO',
+      admission_year: 2026,
+      dob: '2004-05-14',
+      gender: 'Female',
+      state: 'Delhi',
+      pin_code: '110016',
+      status: 'ENROLLED'
+    },
+    {
+      apaar_id: '4567-8901-2345',
+      student_name: 'Aarav Patel',
+      enrollment_no: '2026/EE/102',
+      course: 'B.Tech Electrical Engineering',
+      branch: 'Electrical Engineering',
+      approved_intake: 180,
+      actual_enrolment: 175,
+      supernumerary_seats: 'YES',
+      nri_category: 'YES',
+      oci_status: 'NO',
+      foreign_national: 'NO',
+      admission_year: 2026,
+      dob: '2003-11-20',
+      gender: 'Male',
+      state: 'Rajasthan',
+      pin_code: '333031',
+      status: 'ENROLLED'
+    }
+  ];
+  exportToExcel(sampleData, `${institutionCode}_Student_Registry_Template.xlsx`, 'StudentRegistry');
 }
 
 /**
@@ -124,69 +140,73 @@ export function downloadMinistryDatasetTemplate(ministryCode = 'UIDAI') {
  * @param {Array<string>} columns 
  * @param {string} datasetName 
  */
-export function downloadCustomDatasetTemplate(columns = ['Name', 'House_No', 'Counthouse'], datasetName = 'CustomDataset') {
+export function downloadCustomDatasetTemplate(columns = ['Student_Name', 'APAAR_ID', 'Enrollment_No', 'Course'], datasetName = 'CustomRegistry') {
   const sampleRow = {};
   columns.forEach(col => {
     sampleRow[col] = '';
   });
   const cleanName = datasetName.replace(/[^a-zA-Z0-9_-]/g, '_');
-  exportToExcel([sampleRow], `${cleanName}_Template.xlsx`, 'DatasetTemplate');
+  exportToExcel([sampleRow], `${cleanName}_Template.xlsx`, 'RegistryTemplate');
 }
 
 /**
- * Generate official Page 16 PDF Verification Certificate
+ * Generate official AICTE Verifiable Student Academic Identity Certificate (PDF)
+ * Displays APAAR ID along with Student ID for degree-awarding bodies (Requirement 10)
  */
 export function generateVerificationPDF(report, application) {
   const doc = new jsPDF();
 
   // Header Banner
-  doc.setFillColor(15, 23, 42); // Dark slate
-  doc.rect(0, 0, 210, 40, 'F');
+  doc.setFillColor(11, 37, 69); // AICTE Navy Blue
+  doc.rect(0, 0, 210, 42, 'F');
 
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('GOVERNMENT OF INDIA - REGULATORY VERIFICATION PLATFORM', 15, 18);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Smart India Hackathon 2026 - Problem SIH26261 Consolidated Audit Report', 15, 26);
-  doc.text(`Generated on: ${new Date().toLocaleString()}`, 15, 33);
-
-  // Status Badge
-  doc.setTextColor(15, 23, 42);
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.text(`APPLICATION VERIFICATION REPORT: #${report.applicationId}`, 15, 52);
-
-  doc.setFontSize(11);
+  doc.text('ALL INDIA COUNCIL FOR TECHNICAL EDUCATION (AICTE)', 15, 16);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Applicant Name: ${report.applicantName}`, 15, 62);
-  doc.text(`Scheme Name: ${application?.scheme_name || 'Central Grant Scheme'}`, 15, 70);
-  doc.text(`State / Region: ${application?.state || 'N/A'} (Pin: ${application?.pin_code || 'N/A'})`, 15, 78);
+  doc.text('APAAR ID-Based Student Data Management & Verification Platform (SIH26261)', 15, 24);
+  doc.text('National Academic Identity & Verifiable Degree Certificate Ledger', 15, 31);
+  doc.text(`Generated At: ${new Date().toLocaleString()}`, 15, 38);
+
+  // Status Badge
+  doc.setTextColor(11, 37, 69);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`VERIFIABLE ACADEMIC RECORD: #${report.applicationId}`, 15, 52);
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Student Name: ${report.applicantName}`, 15, 62);
+  doc.text(`APAAR ID: ${application?.apaar_id || application?.aadhaar_no || 'N/A'}`, 15, 69);
+  doc.text(`Institutional Enrollment No: ${application?.enrollment_no || application?.pan_no || 'N/A'}`, 15, 76);
+  doc.text(`Academic Program: ${application?.course || application?.scheme_name || 'B.Tech Program'}`, 15, 83);
+  doc.text(`Institution: ${application?.institution_code || application?.state || 'AICTE Institution'}`, 15, 90);
   
   // Score Box
   doc.setFillColor(241, 245, 249);
-  doc.rect(135, 45, 60, 38, 'F');
+  doc.rect(135, 47, 60, 42, 'F');
   doc.setFont('helvetica', 'bold');
-  doc.text('OVERALL VERDICT', 140, 55);
+  doc.text('APAAR STATUS', 140, 56);
 
   if (report.overallVerdict === 'PASS') {
     doc.setTextColor(16, 185, 129); // Green
-    doc.setFontSize(18);
-    doc.text('PASS', 140, 68);
+    doc.setFontSize(16);
+    doc.text('VERIFIED AUTHENTIC', 140, 68);
   } else if (report.overallVerdict === 'FAIL') {
     doc.setTextColor(239, 68, 68); // Red
-    doc.setFontSize(18);
-    doc.text('FAIL', 140, 68);
+    doc.setFontSize(16);
+    doc.text('FLAGGED / DUPLICATE', 140, 68);
   } else {
     doc.setTextColor(245, 158, 11); // Amber
-    doc.setFontSize(18);
-    doc.text('NEEDS REVIEW', 140, 68);
+    doc.setFontSize(16);
+    doc.text('UNDER REVIEW', 140, 68);
   }
 
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setTextColor(71, 85, 105);
-  doc.text(`AI Confidence: ${report.confidenceScore}%`, 140, 78);
+  doc.text(`Confidence Score: ${report.confidenceScore}%`, 140, 80);
 
   // Field Reconciliations
   doc.setFontSize(12);

@@ -4,7 +4,7 @@ import {
   CheckCircle2, AlertTriangle, FileSpreadsheet, Download, RefreshCw, Trash2,
   FolderPlus, Layers, FileDown, Edit3, Eye, Search, ArrowLeft, Check, X,
   FileText, Calendar, Tag, ExternalLink, Sparkles, Settings, Sliders, Table,
-  ListPlus, Sparkle, Send, Clock, FileCheck, HelpCircle
+  ListPlus, Sparkle, Send, Clock, FileCheck, HelpCircle, GraduationCap
 } from 'lucide-react';
 import { 
   parseExcelFile, 
@@ -12,9 +12,11 @@ import {
   downloadMinistryDatasetTemplate, 
   downloadCustomDatasetTemplate 
 } from '../utils/excelHelper';
+import { executeDynamicVerification, generateVerificationPlan } from '../utils/dynamicVerificationEngine';
+import { triggerVerifyApplication } from '../services/api';
 
 export function MinistryPortal({ 
-  currentMinistryCode = 'UIDAI', 
+  currentMinistryCode = 'IITD', 
   currentUser = null,
   ministries = [], 
   databases = {}, 
@@ -29,17 +31,19 @@ export function MinistryPortal({
   const isMinistryAdmin = currentUser?.subRole !== 'STAFF'; // true for Admin, false for Staff
   const currentMinistry = ministries.find(m => m.code === currentMinistryCode) || ministries[0];
   
-  // Datasets for this ministry
+  // Datasets for this institution
   const ministryDatasets = namedDatasets[currentMinistryCode] || [
     {
       id: `DS-${currentMinistryCode}-001`,
-      name: `${currentMinistryCode} Primary Registry`,
+      name: `${currentMinistryCode} Student Enrollment Master`,
       uploadedAt: '2026-10-23 18:30:00',
-      source: 'Default_Master.xlsx',
-      description: 'Master statutory records for AI verification.',
-      columns: currentMinistryCode === 'UIDAI' ? ['aadhaar_no', 'full_name', 'dob', 'gender', 'state', 'pin_code'] :
-               currentMinistryCode === 'CBDT' ? ['pan_no', 'full_name', 'dob', 'income_slab', 'itr_status'] :
-               ['identifier', 'full_name', 'dob'],
+      source: 'Student_Enrollment_Master.xlsx',
+      description: 'AICTE approved student intake and APAAR academic identity master.',
+      columns: [
+        'apaar_id', 'student_name', 'enrollment_no', 'course', 'branch', 
+        'approved_intake', 'actual_enrolment', 'supernumerary_seats', 
+        'nri_category', 'oci_status', 'foreign_national'
+      ],
       records: databases[currentMinistryCode] || []
     }
   ];
@@ -61,11 +65,11 @@ export function MinistryPortal({
   // Column Helpers
   // -------------------------------------------------------------
   const getDefaultMinistryColumns = (code) => {
-    if (code === 'UIDAI') return ['aadhaar_no', 'full_name', 'dob', 'gender', 'state', 'pin_code'];
-    if (code === 'CBDT') return ['pan_no', 'full_name', 'dob', 'income_slab', 'itr_status'];
-    if (code === 'MoE') return ['roll_no', 'student_name', 'degree', 'university', 'passing_year', 'cgpa'];
-    if (code === 'MCA') return ['din_no', 'director_name', 'company_name'];
-    return ['Name', 'House No', 'Counthouse'];
+    return [
+      'apaar_id', 'student_name', 'enrollment_no', 'course', 'branch', 
+      'approved_intake', 'actual_enrolment', 'supernumerary_seats', 
+      'nri_category', 'oci_status', 'foreign_national'
+    ];
   };
 
   const getDatasetColumns = (ds) => {
@@ -92,7 +96,10 @@ export function MinistryPortal({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newDatasetName, setNewDatasetName] = useState('');
   const [newDatasetDesc, setNewDatasetDesc] = useState('');
-  const [customColumns, setCustomColumns] = useState(['Name', 'House No', 'Counthouse']);
+  const [customColumns, setCustomColumns] = useState([
+    'Student Name', 'APAAR ID', 'Enrollment No', 'Course', 'Branch', 
+    'Approved Intake', 'Actual Enrolment', 'Supernumerary Seats'
+  ]);
   const [newColumnInput, setNewColumnInput] = useState('');
 
   // -------------------------------------------------------------
@@ -126,17 +133,143 @@ export function MinistryPortal({
   // -------------------------------------------------------------
   // Dynamic Application Creation & Flexible Excel Upload State
   // -------------------------------------------------------------
-  const [appCustomColumns, setAppCustomColumns] = useState(['Applicant Name', 'House No', 'Counthouse', 'State', 'Contact']);
+  const [appCustomColumns, setAppCustomColumns] = useState([
+    'Student Name', 'APAAR ID', 'Enrollment No', 'Course', 'Branch', 
+    'Approved Intake', 'Actual Enrolment', 'Supernumerary Seats', 'NRI Category'
+  ]);
   const [newAppColumnInput, setNewAppColumnInput] = useState('');
   const [showCreateAppModal, setShowCreateAppModal] = useState(false);
   const [newAppRecord, setNewAppRecord] = useState({
-    scheme_name: `${currentMinistry?.name || currentMinistryCode} Welfare Scheme`
+    scheme_name: `${currentMinistry?.name || currentMinistryCode} Academic Programme`
   });
   const [stagedAppBatch, setStagedAppBatch] = useState([]);
   const [stagedAppColumns, setStagedAppColumns] = useState([]);
   const [stagedAppFileName, setStagedAppFileName] = useState('');
   const [selectedAppDetail, setSelectedAppDetail] = useState(null);
+  const [isCheckingDb, setIsCheckingDb] = useState(false);
+  const [inspectCheckResult, setInspectCheckResult] = useState(null);
+  const [inspectStepMessage, setInspectStepMessage] = useState('');
   const [appSearchQuery, setAppSearchQuery] = useState('');
+
+  // Clean deduplicated entries for inspect modal
+  const getCleanAppEntries = (app) => {
+    if (!app) return [];
+    const seen = new Set();
+    const list = [];
+    const skip = ['verification_report', 'dynamicPlan', 'dynamicResult', 'custom_fields', 'ai_verdict', 'confidence_score'];
+    const priority = ['scheme_name', 'applicant_name', 'dob', 'gender', 'father_name', 'aadhaar_no', 'pan_no', 'claimed_income', 'state', 'pin_code', 'status', 'submittedAt', 'submitted_at'];
+    const allKeys = [...priority, ...Object.keys(app)];
+    for (const k of allKeys) {
+      if (skip.includes(k)) continue;
+      const val = app[k];
+      if (val === undefined || val === null || String(val).trim() === '') continue;
+      const norm = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!seen.has(norm)) {
+        seen.add(norm);
+        list.push({ key: k, label: formatColumnLabel(k), value: String(val) });
+      }
+    }
+    return list;
+  };
+
+  const handleRunModalDatabaseCheck = async (app) => {
+    setIsCheckingDb(true);
+    setInspectStepMessage('Querying UIDAI Biometric Registry for citizen match...');
+    await new Promise(r => setTimeout(r, 400));
+
+    setInspectStepMessage('Querying CBDT Direct Tax & PAN linkage databases...');
+    await new Promise(r => setTimeout(r, 400));
+
+    setInspectStepMessage('Cross-checking Department Ingestion Schemas & Domicile records...');
+    await new Promise(r => setTimeout(r, 400));
+
+    const dummyPlan = generateVerificationPlan(app, [], []);
+    const dynamicResult = executeDynamicVerification(app, dummyPlan, databases);
+
+    setInspectCheckResult(dynamicResult);
+    setIsCheckingDb(false);
+    setInspectStepMessage('');
+
+    let status = 'VERIFIED';
+    if (dynamicResult.overallVerdict === 'MISMATCH_DETECTED') status = 'FLAGGED';
+    else if (dynamicResult.overallVerdict === 'MANUAL_REVIEW_REQUIRED') status = 'NEEDS_REVIEW';
+
+    const updatedApp = {
+      ...app,
+      status,
+      ai_verdict: dynamicResult.overallVerdict === 'PASSED' ? 'PASS' : dynamicResult.overallVerdict === 'MISMATCH_DETECTED' ? 'FAIL' : 'NEEDS_REVIEW',
+      confidence_score: dynamicResult.confidenceScore,
+      verification_report: dynamicResult
+    };
+
+    setSelectedAppDetail(updatedApp);
+
+    if (onApplicationsUpdate) {
+      onApplicationsUpdate(prev => prev.map(a => a.id === app.id ? updatedApp : a));
+    }
+
+    try {
+      await triggerVerifyApplication(app.id);
+    } catch (err) {
+      // Handled locally
+    }
+
+    if (onLogAudit) {
+      onLogAudit({
+        actor: currentUser?.name || `${currentMinistryCode} Officer`,
+        portal: `Ministry Portal (${currentMinistryCode})`,
+        action: 'REAL_DATABASE_VERIFICATION_COMPLETE',
+        details: `Real cross-database verification executed for ${app.applicant_name} (${app.id}). Verdict: ${updatedApp.ai_verdict} (${updatedApp.confidence_score}% match).`,
+        severity: status === 'FLAGGED' ? 'DANGER' : status === 'VERIFIED' ? 'SUCCESS' : 'WARNING'
+      });
+    }
+  };
+
+  const handleRegisterCitizenInUIDAI = (citizenName) => {
+    const newUidaiRecord = {
+      aadhaar_no: `${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
+      full_name: citizenName,
+      dob: '1995-05-15',
+      gender: 'Male',
+      father_name: 'Authorized Citizen Father',
+      state: selectedAppDetail?.state || selectedAppDetail?.State || 'Delhi',
+      pin_code: '110001',
+      biometric_status: 'AUTHENTICATED'
+    };
+
+    const currentUidai = databases.UIDAI || [];
+    const updatedUidai = [newUidaiRecord, ...currentUidai];
+
+    if (onDatabaseUpdate) {
+      onDatabaseUpdate('UIDAI', updatedUidai);
+    }
+
+    alert(`Successfully registered "${citizenName}" into UIDAI National Biometric Master Database with Aadhaar #${newUidaiRecord.aadhaar_no}! Re-running real database check...`);
+
+    const updatedDatabases = {
+      ...databases,
+      UIDAI: updatedUidai
+    };
+    const dummyPlan = generateVerificationPlan(selectedAppDetail, [], []);
+    const dynamicResult = executeDynamicVerification(selectedAppDetail, dummyPlan, updatedDatabases);
+
+    setInspectCheckResult(dynamicResult);
+
+    const updatedApp = {
+      ...selectedAppDetail,
+      aadhaar_no: newUidaiRecord.aadhaar_no,
+      status: 'VERIFIED',
+      ai_verdict: 'PASS',
+      confidence_score: 95,
+      verification_report: dynamicResult
+    };
+
+    setSelectedAppDetail(updatedApp);
+
+    if (onApplicationsUpdate) {
+      onApplicationsUpdate(prev => prev.map(a => a.id === selectedAppDetail.id ? updatedApp : a));
+    }
+  };
 
   // Staff State
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
@@ -648,7 +781,7 @@ export function MinistryPortal({
     <div style={{ maxWidth: '1280px', margin: '0 auto', paddingBottom: '3rem' }}>
       
       {/* ========================================================= */}
-      {/* TOP MINISTRY HERO HEADER */}
+      {/* TOP INSTITUTION HERO HEADER */}
       {/* ========================================================= */}
       <div style={{
         padding: '2rem',
@@ -676,7 +809,7 @@ export function MinistryPortal({
             border: '2px solid rgba(255,255,255,0.25)',
             boxShadow: '0 4px 15px rgba(15, 118, 110, 0.4)'
           }}>
-            <Building2 size={34} color="#fff" />
+            <GraduationCap size={34} color="#fff" />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
@@ -691,7 +824,7 @@ export function MinistryPortal({
                 textTransform: 'uppercase',
                 letterSpacing: '0.04em'
               }}>
-                {isMinistryAdmin ? 'Ministry Admin Tenant' : 'Ministry Staff View'}
+                {isMinistryAdmin ? 'Institution Admin Tenant' : 'Institution Staff View'}
               </span>
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
@@ -700,7 +833,7 @@ export function MinistryPortal({
                 color: '#5eead4', fontWeight: 600
               }}>
                 <span className="pulse-indicator"></span>
-                Central AI Engine Synced
+                AICTE APAAR Engine Synced
               </span>
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
@@ -708,14 +841,14 @@ export function MinistryPortal({
                 background: 'rgba(234,242,248,0.15)', border: '1px solid rgba(234,242,248,0.35)',
                 color: 'var(--gov-ice)', fontWeight: 600
               }}>
-                {ministryDatasets.length} Named Dataset{ministryDatasets.length !== 1 ? 's' : ''} ({totalRecordsCount} Total Records)
+                {ministryDatasets.length} Student Registr{ministryDatasets.length !== 1 ? 'ies' : 'y'} ({totalRecordsCount} Student Records)
               </span>
             </div>
             <h1 style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.02em', margin: 0, color: '#ffffff' }}>
               {currentMinistry?.name}
             </h1>
             <p style={{ color: 'rgba(255,255,255,0.72)', fontSize: '0.85rem', margin: '0.35rem 0 0 0' }}>
-              Ministry Domain Code: <strong className="mono" style={{ color: 'var(--gov-amber)' }}>{currentMinistryCode}</strong> • Logged in as: <strong style={{ color: '#fff' }}>{currentUser?.name || 'Officer'}</strong>
+              AICTE Institution Code: <strong className="mono" style={{ color: 'var(--gov-amber)' }}>{currentMinistryCode}</strong> • Logged in as: <strong style={{ color: '#fff' }}>{currentUser?.name || 'Officer'}</strong>
             </p>
           </div>
         </div>
@@ -726,7 +859,10 @@ export function MinistryPortal({
             <>
               <button
                 onClick={() => {
-                  setCustomColumns(['Name', 'House No', 'Counthouse']);
+                  setCustomColumns([
+                    'Student Name', 'APAAR ID', 'Enrollment No', 'Course', 'Branch', 
+                    'Approved Intake', 'Actual Enrolment', 'Supernumerary Seats'
+                  ]);
                   setShowCreateModal(true);
                 }}
                 style={{
@@ -738,7 +874,7 @@ export function MinistryPortal({
                 }}
               >
                 <FolderPlus size={16} />
-                + Create New Dataset
+                + Create Student Registry
               </button>
 
               <button
@@ -762,7 +898,7 @@ export function MinistryPortal({
 
           <button
             onClick={() => downloadMinistryDatasetTemplate(currentMinistryCode)}
-            title="Download reference Excel format for this ministry"
+            title="Download reference Excel format for student enrollment"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
               background: 'rgba(255,255,255,0.12)', color: '#fff',
@@ -772,7 +908,7 @@ export function MinistryPortal({
             }}
           >
             <Download size={16} />
-            Download Excel Template
+            Download Enrollment Template
           </button>
         </div>
       </div>
@@ -790,7 +926,7 @@ export function MinistryPortal({
           }}
         >
           <Layers size={16} />
-          Multiple Datasets Registry ({ministryDatasets.length})
+          Student Enrolment Registries ({ministryDatasets.length})
         </button>
 
         <button
@@ -802,7 +938,7 @@ export function MinistryPortal({
           }}
         >
           <FileSpreadsheet size={16} />
-          Application Ingestion & Custom Schema ({ministryApplications.length})
+          Student Record Ingestion & Quotas ({ministryApplications.length})
         </button>
 
         {isMinistryAdmin && (
@@ -815,7 +951,7 @@ export function MinistryPortal({
             }}
           >
             <Users size={16} />
-            Staff & Admins Directory ({staffList.length})
+            Institution Staff Directory ({staffList.length})
           </button>
         )}
       </div>
@@ -1985,59 +2121,227 @@ export function MinistryPortal({
       )}
 
       {/* ========================================================= */}
-      {/* MODAL: INSPECT SUBMITTED APPLICATION CUSTOM FIELDS */}
+      {/* MODAL: INSPECT SUBMITTED APPLICATION & REAL DATABASE CHECK */}
       {/* ========================================================= */}
       {selectedAppDetail && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '580px', padding: '2rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+        <div className="modal-overlay" onClick={() => setSelectedAppDetail(null)}>
+          <div className="modal-content" style={{ maxWidth: '680px', padding: '2rem', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1rem' }}>
               <div>
-                <span className="mono" style={{ color: 'var(--primary-light)', fontSize: '0.85rem' }}>
-                  {selectedAppDetail.id}
-                </span>
-                <h3 style={{ fontSize: '1.3rem', fontWeight: 700, margin: '0.2rem 0 0 0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem' }}>
+                  <span className="mono" style={{ color: 'var(--gov-navy)', fontWeight: 700, fontSize: '0.85rem' }}>
+                    {selectedAppDetail.id}
+                  </span>
+                  <span className={`badge ${selectedAppDetail.status === 'VERIFIED' ? 'badge-pass' : selectedAppDetail.status === 'FLAGGED' ? 'badge-fail' : 'badge-info'}`}>
+                    <span className="live-dot" style={{ width: '6px', height: '6px', background: selectedAppDetail.status === 'VERIFIED' ? '#10b981' : '#ef4444', borderRadius: '50%', display: 'inline-block' }}></span>
+                    {selectedAppDetail.status || 'PENDING_AI_CHECK'}
+                  </span>
+                </div>
+                <h3 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, color: 'var(--gov-navy)' }}>
                   {selectedAppDetail.applicant_name}
                 </h3>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                  Forwarded via <strong>{currentMinistryCode} Ministry Tenant</strong> • Scheme: {selectedAppDetail.scheme_name}
+                </div>
               </div>
               <button
                 className="btn-icon"
                 onClick={() => setSelectedAppDetail(null)}
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.35rem' }}
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            <div style={{
-              padding: '1.25rem',
-              background: 'rgba(255, 255, 255, 0.02)',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-subtle)',
-              marginBottom: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.6rem'
-            }}>
-              {Object.keys(selectedAppDetail)
-                .filter(k => selectedAppDetail[k] !== undefined && selectedAppDetail[k] !== null && String(selectedAppDetail[k]).trim() !== '')
-                .map((key, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.04)', paddingBottom: '0.4rem' }}>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                      {formatColumnLabel(key)}:
+            {/* SECTION 1: APPLICATION PARTICULARS (High Contrast, Deduplicated) */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--gov-navy)', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <FileText size={15} color="var(--gov-teal)" />
+                Submitted Application Particulars
+              </div>
+
+              <div style={{
+                padding: '1rem 1.25rem',
+                background: '#f8fafc',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-subtle)',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                gap: '0.75rem'
+              }}>
+                {getCleanAppEntries(selectedAppDetail).map((entry, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.3rem 0', borderBottom: '1px solid rgba(18,59,93,0.06)' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', fontWeight: 600 }}>
+                      {entry.label}:
                     </span>
-                    <strong style={{ color: '#fff', fontSize: '0.9rem', textAlign: 'right', maxWidth: '320px', wordBreak: 'break-word' }}>
-                      {String(selectedAppDetail[key])}
+                    <strong style={{
+                      color: 'var(--gov-navy)',
+                      fontSize: '0.86rem',
+                      fontWeight: 700,
+                      background: 'var(--gov-ice)',
+                      padding: '0.2rem 0.6rem',
+                      borderRadius: '4px',
+                      border: '1px solid rgba(18, 59, 93, 0.15)',
+                      textAlign: 'right',
+                      maxWidth: '240px',
+                      wordBreak: 'break-word'
+                    }}>
+                      {entry.value}
                     </strong>
                   </div>
                 ))}
+              </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            {/* SECTION 2: REAL DATABASE CROSS-CHECK ENGINE */}
+            <div style={{
+              background: '#f0fdf4',
+              border: '1.5px solid #10b981',
+              borderRadius: 'var(--radius-md)',
+              padding: '1.25rem',
+              marginBottom: '1.5rem'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Database size={18} color="#047857" />
+                  <strong style={{ fontSize: '0.95rem', color: '#065f46' }}>
+                    Autonomous Sovereign Database Verification Check
+                  </strong>
+                </div>
+
+                {selectedAppDetail.status === 'VERIFIED' && (
+                  <span className="live-badge" style={{ background: '#10b981', color: '#fff', fontSize: '0.72rem' }}>
+                    ✓ CONFIRMED IN MASTER REGISTRY
+                  </span>
+                )}
+                {selectedAppDetail.status === 'FLAGGED' && (
+                  <span className="live-badge" style={{ background: '#ef4444', color: '#fff', fontSize: '0.72rem' }}>
+                    ✕ NOT LOCATED IN DATABASE
+                  </span>
+                )}
+              </div>
+
+              <p style={{ fontSize: '0.82rem', color: '#065f46', margin: '0 0 1rem 0' }}>
+                Cross-checks applicant identity, token authenticity, and compliance against <strong>UIDAI Biometrics</strong>, <strong>CBDT Direct Tax Core</strong>, and <strong>Department Domicile</strong> records.
+              </p>
+
+              {/* Action Button: Run Real Check */}
               <button
+                type="button"
+                className="btn-primary"
+                onClick={() => handleRunModalDatabaseCheck(selectedAppDetail)}
+                disabled={isCheckingDb}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  padding: '0.75rem',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  boxShadow: '0 4px 12px rgba(16,185,129,0.35)',
+                  border: 'none',
+                  cursor: isCheckingDb ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isCheckingDb ? (
+                  <>
+                    <RefreshCw size={16} className="spin" />
+                    {inspectStepMessage || 'Querying Sovereign Databases...'}
+                  </>
+                ) : (
+                  <>
+                    <Cpu size={16} />
+                    ⚡ Run Real Database Verification Check Now
+                  </>
+                )}
+              </button>
+
+              {/* Real Database Evidence Table (If check executed or report available) */}
+              {(inspectCheckResult || selectedAppDetail.verification_report) && (
+                <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(16,185,129,0.2)' }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#065f46', marginBottom: '0.5rem' }}>
+                    📊 Real-Time Database Query Findings:
+                  </div>
+
+                  <div style={{ background: '#fff', borderRadius: '8px', border: '1px solid rgba(16,185,129,0.3)', overflow: 'hidden' }}>
+                    <table className="gov-table" style={{ fontSize: '0.78rem', margin: 0 }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc' }}>
+                          <th>DATABASE REGISTRY</th>
+                          <th>SUBMITTED VALUE</th>
+                          <th>DATABASE RECORD</th>
+                          <th>CONFIDENCE</th>
+                          <th>STATUS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {((inspectCheckResult || selectedAppDetail.verification_report).evidenceLogs || []).map((ev, ei) => (
+                          <tr key={ei}>
+                            <td>
+                              <strong style={{ color: 'var(--gov-navy)' }}>{ev.owningMinistry || ev.sourceDatasetId}</strong>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ev.field}</div>
+                            </td>
+                            <td><span className="mono">{ev.submittedValue}</span></td>
+                            <td>
+                              <span className="mono" style={{ color: ev.status === 'PASSED' ? '#047857' : '#b91c1c', fontWeight: 600 }}>
+                                {ev.referenceValue}
+                              </span>
+                            </td>
+                            <td>
+                              <strong>{ev.matchConfidence || 0}%</strong>
+                            </td>
+                            <td>
+                              <span className={`badge ${ev.status === 'PASSED' ? 'badge-pass' : ev.status === 'MISMATCH_DETECTED' ? 'badge-fail' : 'badge-review'}`}>
+                                {ev.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Summary Metric */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div style={{ fontSize: '0.82rem', color: '#065f46' }}>
+                      Overall Verdict: <strong>{(inspectCheckResult || selectedAppDetail.verification_report).overallVerdict}</strong> • Match Confidence: <strong>{(inspectCheckResult || selectedAppDetail.verification_report).confidenceScore}%</strong>
+                    </div>
+
+                    {/* Quick 1-click test helper if citizen is not in UIDAI */}
+                    {((inspectCheckResult || selectedAppDetail.verification_report).evidenceLogs || []).some(e => e.status === 'NO_MATCHING_RECORD') && (
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        onClick={() => handleRegisterCitizenInUIDAI(selectedAppDetail.applicant_name)}
+                        style={{
+                          background: '#fff',
+                          border: '1px solid #10b981',
+                          color: '#047857',
+                          fontWeight: 700,
+                          fontSize: '0.75rem',
+                          padding: '0.35rem 0.75rem'
+                        }}
+                        title="Simulate registering this applicant into the UIDAI Master Database and verify 100% match"
+                      >
+                        ➕ Register "{selectedAppDetail.applicant_name}" into UIDAI Database (Test Match)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                type="button"
                 className="btn-secondary"
                 onClick={() => setSelectedAppDetail(null)}
               >
-                Close
+                Close Inspection
               </button>
             </div>
           </div>

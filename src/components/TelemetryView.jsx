@@ -14,12 +14,12 @@ export function TelemetryView({ applications = [], ministries = [] }) {
 
   // Live streaming pipeline events
   const [streamEvents, setStreamEvents] = useState([
-    { id: 1, time: '14:38:12.450', service: 'UIDAI-ADAPTER', event: 'Biometric token query resolved', latency: '24ms', status: 'SUCCESS' },
-    { id: 2, time: '14:38:12.482', service: 'LEVENSHTEIN-CORE', event: 'Phonetic match index 98.4% calculated for Name', latency: '6ms', status: 'SUCCESS' },
-    { id: 3, time: '14:38:12.510', service: 'CBDT-TAX-CORE', event: 'PAN-Aadhaar linkage verified [Valid]', latency: '41ms', status: 'SUCCESS' },
-    { id: 4, time: '14:38:12.560', service: 'EXPANSION-ENGINE', event: 'Trigger evaluated: Declared income > ₹10L -> MCA scan scheduled', latency: '12ms', status: 'INFO' },
-    { id: 5, time: '14:38:12.610', service: 'MCA21-ADAPTER', event: 'DIN registry query completed [1 Active Director record]', latency: '54ms', status: 'SUCCESS' },
-    { id: 6, time: '14:38:12.650', service: 'RULE-EVALUATOR', event: 'DPDP Act 2023 Purpose Limitation verified', latency: '8ms', status: 'SUCCESS' }
+    { id: 1, time: '14:38:12.450', service: 'APAAR-IDENTITY-CORE', event: '12-digit academic identity token resolved with NAD', latency: '24ms', status: 'SUCCESS' },
+    { id: 2, time: '14:38:12.482', service: 'LEVENSHTEIN-CORE', event: 'Phonetic match index 99.2% calculated for Student Name', latency: '5ms', status: 'SUCCESS' },
+    { id: 3, time: '14:38:12.510', service: 'AICTE-INTAKE-ENGINE', event: 'Approved intake capacity verified [118/120 Enrolled]', latency: '32ms', status: 'SUCCESS' },
+    { id: 4, time: '14:38:12.560', service: 'DUPLICATE-ENROLMENT-DETECTOR', event: 'Cross-institution hash audit passed [Single Institutional Lock]', latency: '18ms', status: 'SUCCESS' },
+    { id: 5, time: '14:38:12.610', service: 'SUPERNUMERARY-CHECK', event: 'NRI / OCI / FN quota verified within 15% statutory ceiling', latency: '14ms', status: 'SUCCESS' },
+    { id: 6, time: '14:38:12.650', service: 'RULE-EVALUATOR', event: 'AICTE Approval Process Handbook Clause 3.4 satisfied', latency: '8ms', status: 'SUCCESS' }
   ]);
 
   // Simulate real-time telemetry updates
@@ -29,13 +29,13 @@ export function TelemetryView({ applications = [], ministries = [] }) {
       setThroughput(prev => Math.floor(135 + Math.random() * 25));
       setAvgLatency(prev => Math.floor(32 + Math.random() * 12));
       
-      const services = ['UIDAI-ADAPTER', 'CBDT-TAX-CORE', 'DIGILOCKER-NAD', 'MCA21-ADAPTER', 'NORMALIZER-ENGINE', 'PHONETIC-AI'];
+      const services = ['APAAR-IDENTITY-CORE', 'AICTE-INTAKE-ENGINE', 'DUPLICATE-DETECTOR', 'IITD-NODE', 'BITS-NODE', 'VIT-NODE', 'NITT-NODE'];
       const actions = [
-        'Cached identity record hit (L1 In-Memory)',
-        'Cross-Ministry federated payload authenticated',
-        'Cryptographic hash match confirmed against registry',
-        'Automatic check expansion trigger passed',
-        'Multi-entity reconciliation entry committed'
+        'Cached academic identity hit (L1 In-Memory)',
+        'Cross-institution federated record authenticated',
+        'Cryptographic hash match confirmed against APAAR registry',
+        'Sanctioned intake capacity ceiling verified',
+        'Multi-college duplicate audit passed successfully'
       ];
       const randomService = services[Math.floor(Math.random() * services.length)];
       const randomAction = actions[Math.floor(Math.random() * actions.length)];
@@ -59,10 +59,10 @@ export function TelemetryView({ applications = [], ministries = [] }) {
   }, [isStreaming]);
 
   const adapters = [
-    { code: 'UIDAI', name: 'UIDAI Demographic & Biometric Gateway', latency: '24ms', uptime: '99.98%', status: 'HEALTHY', tps: '1,240 req/s', protocol: 'mTLS v1.3' },
-    { code: 'CBDT', name: 'CBDT Income Tax Core API', latency: '42ms', uptime: '99.95%', status: 'HEALTHY', tps: '890 req/s', protocol: 'HTTPS / REST' },
-    { code: 'MoE', name: 'DigiLocker / NAD Academic Repository', latency: '31ms', uptime: '99.99%', status: 'HEALTHY', tps: '640 req/s', protocol: 'OAuth 2.0 / JWT' },
-    { code: 'MCA', name: 'MCA21 Corporate & Director Registry', latency: '58ms', uptime: '99.91%', status: 'HEALTHY', tps: '380 req/s', protocol: 'JSON-RPC' }
+    { code: 'IITD', name: 'IIT Delhi Institutional Enrolment Node', latency: '24ms', uptime: '99.98%', status: 'HEALTHY', tps: '1,240 req/s', protocol: 'mTLS v1.3' },
+    { code: 'BITS', name: 'BITS Pilani Academic Depository Adapter', latency: '42ms', uptime: '99.95%', status: 'HEALTHY', tps: '890 req/s', protocol: 'HTTPS / REST' },
+    { code: 'VIT', name: 'VIT Vellore Student Registry Core API', latency: '31ms', uptime: '99.99%', status: 'HEALTHY', tps: '640 req/s', protocol: 'OAuth 2.0 / JWT' },
+    { code: 'NITT', name: 'NIT Trichy Enrolment Gateway', latency: '38ms', uptime: '99.94%', status: 'HEALTHY', tps: '520 req/s', protocol: 'mTLS v1.3' }
   ];
 
   return (

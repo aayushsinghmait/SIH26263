@@ -4,9 +4,9 @@ import {
   ShieldAlert, UserPlus, PlusCircle, CheckCircle2, AlertTriangle, 
   XCircle, Upload, Download, RefreshCw, Eye, ArrowRight, Sparkles, Filter,
   Layers, Database, Compass, Check, X, Shield, Lock,
-  Activity, AlertOctagon, Scale, Server
+  Activity, AlertOctagon, Scale, Server, GraduationCap
 } from 'lucide-react';
-import { runAICrossVerification, maskAadhaar, maskPAN } from '../utils/aiEngine';
+import { runAICrossVerification, maskAadhaar, maskPAN, maskAPAAR } from '../utils/aiEngine';
 import { generateVerificationPlan, executeDynamicVerification } from '../utils/dynamicVerificationEngine';
 import { parseExcelFile, downloadApplicationTemplate, exportToExcel } from '../utils/excelHelper';
 import { VerificationReportView } from './VerificationReportView';
@@ -14,6 +14,11 @@ import { AuditHistoryView } from './AuditHistoryView';
 import { TelemetryView } from './TelemetryView';
 import { FraudIntelligenceView } from './FraudIntelligenceView';
 import { RuleStudioView } from './RuleStudioView';
+import { 
+  submitApplication, 
+  triggerVerifyApplication, 
+  triggerVerifyAllApplications 
+} from '../services/api';
 
 export function AdminPortal({ 
   applications = [], 
@@ -22,10 +27,13 @@ export function AdminPortal({
   datasetRegistry = [],
   complianceRules = [], 
   auditLogs = [], 
+  isSocketConnected = true,
+  onOpenCitizenRequest,
   onApplicationsUpdate, 
   onMinistriesUpdate, 
   onDatasetRegistryUpdate,
   onRulesUpdate, 
+  onDecisionSubmit,
   onLogAudit 
 }) {
   const [activeTab, setActiveTab] = useState('DASHBOARD'); // 'DASHBOARD', 'SEND_APP', 'QUEUE', 'TELEMETRY', 'FRAUD', 'MINISTRIES', 'REGISTRY', 'RULE_STUDIO', 'AUDIT', 'REPORT'
@@ -42,16 +50,16 @@ export function AdminPortal({
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
   const [newAdmin, setNewAdmin] = useState({ name: '', email: '', roleLevel: 'SUPER_ADMIN' });
   const [adminList, setAdminList] = useState([
-    { id: 'ADM-01', name: 'Dr. A. Verma', email: 'admin.central@gov.in', role: 'Chief Platform Administrator' },
-    { id: 'ADM-02', name: 'Rohit Deshmukh', email: 'r.deshmukh@gov.in', role: 'Senior Regulatory Reviewer' },
-    { id: 'ADM-03', name: 'Meenakshi Sundaram', email: 'm.sundaram@gov.in', role: 'Audit Compliance Officer' }
+    { id: 'ADM-01', name: 'Dr. A. Verma', email: 'admin.apaar@aicte-india.org', role: 'APAAR Central Lead Administrator' },
+    { id: 'ADM-02', name: 'Rohit Deshmukh', email: 'r.deshmukh@aicte-india.org', role: 'AICTE Institutional Data Reviewer' },
+    { id: 'ADM-03', name: 'Meenakshi Sundaram', email: 'm.sundaram@aicte-india.org', role: 'APAAR Academic Audit Officer' }
   ]);
 
   const [showAddMinistryModal, setShowAddMinistryModal] = useState(false);
   const [newMinistry, setNewMinistry] = useState({
     code: '',
     name: '',
-    category: 'Regulatory Authority',
+    category: 'AICTE Approved Institution',
     adminEmail: ''
   });
 
@@ -89,41 +97,166 @@ export function AdminPortal({
     setActiveTab('REPORT');
   };
 
-  // Run AI Verification on all pending / selected applications using Central Dynamic Discovery
-  const handleRunBatchVerification = async () => {
-    setIsProcessingAI(true);
-    setAiProcessingStep('Querying Central Dataset Registry for active schemas & sharing agreements...');
-    await new Promise(r => setTimeout(r, 600));
+  // Quick Test Live Student Record Generator (Simulates incoming student record submission)
+  const handleQuickSendTestRequest = async () => {
+    const samplePresets = [
+      {
+        applicant_name: 'Ananya Sharma',
+        student_name: 'Ananya Sharma',
+        scheme_name: 'B.Tech Computer Science and Engineering',
+        course: 'B.Tech Computer Science and Engineering',
+        branch: 'Computer Science',
+        apaar_id: '9012-3456-7890',
+        aadhaar_no: '9012-3456-7890',
+        pan_no: '2026/CS/084',
+        enrollment_no: '2026/CS/084',
+        institution_code: 'IITD',
+        state: 'Delhi',
+        dob: '2004-05-14',
+        gender: 'Female',
+        claimed_income: 'N/A',
+        education_roll: '2026/CS/084',
+        approved_intake: 120,
+        actual_enrolment: 118,
+        supernumerary_seats: 'NO',
+        nri_category: 'NO',
+        oci_status: 'NO',
+        foreign_national: 'NO',
+        status: 'PENDING_AI_CHECK'
+      },
+      {
+        applicant_name: 'Aarav Patel',
+        student_name: 'Aarav Patel',
+        scheme_name: 'B.Tech Electrical Engineering',
+        course: 'B.Tech Electrical Engineering',
+        branch: 'Electrical Engineering',
+        apaar_id: '4567-8901-2345',
+        aadhaar_no: '4567-8901-2345',
+        pan_no: '2026/EE/102',
+        enrollment_no: '2026/EE/102',
+        institution_code: 'BITS',
+        state: 'Rajasthan',
+        dob: '2003-11-20',
+        gender: 'Male',
+        claimed_income: 'N/A',
+        education_roll: '2026/EE/102',
+        approved_intake: 180,
+        actual_enrolment: 175,
+        supernumerary_seats: 'YES',
+        nri_category: 'YES',
+        oci_status: 'NO',
+        foreign_national: 'NO',
+        status: 'PENDING_AI_CHECK'
+      },
+      {
+        applicant_name: 'Rohan Mehra',
+        student_name: 'Rohan Mehra',
+        scheme_name: 'B.Tech Mechanical Engineering',
+        course: 'B.Tech Mechanical Engineering',
+        branch: 'Mechanical Engineering',
+        apaar_id: '6789-0123-4567',
+        aadhaar_no: '6789-0123-4567',
+        pan_no: '2026/ME/055',
+        enrollment_no: '2026/ME/055',
+        institution_code: 'VIT',
+        state: 'Tamil Nadu',
+        dob: '2004-02-18',
+        gender: 'Male',
+        claimed_income: 'N/A',
+        education_roll: '2026/ME/055',
+        approved_intake: 60,
+        actual_enrolment: 65,
+        supernumerary_seats: 'YES',
+        nri_category: 'NO',
+        oci_status: 'NO',
+        foreign_national: 'YES',
+        status: 'PENDING_AI_CHECK'
+      }
+    ];
 
-    setAiProcessingStep('Generating Dynamic Verification Plans for submitted applications...');
-    await new Promise(r => setTimeout(r, 600));
+    const pick = samplePresets[Math.floor(Math.random() * samplePresets.length)];
+    const newId = `STU-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    setAiProcessingStep('Querying UIDAI Biometric Registry, CBDT Tax Core & DigiLocker Depository...');
-    await new Promise(r => setTimeout(r, 700));
+    try {
+      await submitApplication({
+        ...pick,
+        id: newId,
+        submittedBy: `${pick.applicant_name} (Live Test Stream)`,
+        sourcePortal: 'MERN Live Generator'
+      });
+      // Will broadcast via socket.io immediately!
+    } catch (err) {
+      console.warn('API error, applying locally:', err.message);
+      const fallbackApp = {
+        ...pick,
+        id: newId,
+        ai_verdict: 'PENDING',
+        confidence_score: 0,
+        submitted_at: new Date().toISOString().replace('T', ' ').slice(0, 19)
+      };
+      if (onApplicationsUpdate) {
+        onApplicationsUpdate(prev => [fallbackApp, ...prev]);
+      }
+    }
+  };
 
-    setAiProcessingStep('Evaluating Automatic Check Expansions (MCA Directorships scan)...');
-    await new Promise(r => setTimeout(r, 600));
-
-    setAiProcessingStep('Synthesizing evidence trails & calculating deterministic match indices...');
-    await new Promise(r => setTimeout(r, 700));
-
-    const updated = applications.map(app => {
-      const plan = generateVerificationPlan(app, datasetRegistry, complianceRules);
-      const dynamicResult = executeDynamicVerification(app, plan, databases);
-
+  // Verify single application via API
+  const handleVerifySingle = async (appId) => {
+    try {
+      await triggerVerifyApplication(appId);
+    } catch (err) {
+      const target = applications.find(a => a.id === appId);
+      if (!target) return;
+      const plan = generateVerificationPlan(target, datasetRegistry, complianceRules);
+      const dynamicResult = executeDynamicVerification(target, plan, databases);
       let status = 'VERIFIED';
       if (dynamicResult.overallVerdict === 'MISMATCH_DETECTED') status = 'FLAGGED';
       else if (dynamicResult.overallVerdict === 'MANUAL_REVIEW_REQUIRED') status = 'NEEDS_REVIEW';
 
-      return {
-        ...app,
-        status,
-        ai_verdict: dynamicResult.overallVerdict === 'PASSED' ? 'PASS' : dynamicResult.overallVerdict === 'MISMATCH_DETECTED' ? 'FAIL' : 'NEEDS_REVIEW',
-        confidence_score: dynamicResult.confidenceScore
-      };
-    });
+      if (onApplicationsUpdate) {
+        onApplicationsUpdate(prev => prev.map(a => a.id === appId ? {
+          ...a,
+          status,
+          ai_verdict: dynamicResult.overallVerdict === 'PASSED' ? 'PASS' : dynamicResult.overallVerdict === 'MISMATCH_DETECTED' ? 'FAIL' : 'NEEDS_REVIEW',
+          confidence_score: dynamicResult.confidenceScore
+        } : a));
+      }
+    }
+  };
 
-    onApplicationsUpdate(updated);
+  // Run AI Verification on all pending / selected applications using Central Dynamic Discovery
+  const handleRunBatchVerification = async () => {
+    setIsProcessingAI(true);
+    setAiProcessingStep('Querying Central Dataset Registry for active schemas & sharing agreements...');
+    await new Promise(r => setTimeout(r, 500));
+
+    setAiProcessingStep('Executing dynamic cross-checks & rule evaluations on MERN backend...');
+
+    try {
+      await triggerVerifyAllApplications();
+    } catch (err) {
+      console.warn('API batch verify error, falling back locally:', err.message);
+      const updated = applications.map(app => {
+        const plan = generateVerificationPlan(app, datasetRegistry, complianceRules);
+        const dynamicResult = executeDynamicVerification(app, plan, databases);
+
+        let status = 'VERIFIED';
+        if (dynamicResult.overallVerdict === 'MISMATCH_DETECTED') status = 'FLAGGED';
+        else if (dynamicResult.overallVerdict === 'MANUAL_REVIEW_REQUIRED') status = 'NEEDS_REVIEW';
+
+        return {
+          ...app,
+          status,
+          ai_verdict: dynamicResult.overallVerdict === 'PASSED' ? 'PASS' : dynamicResult.overallVerdict === 'MISMATCH_DETECTED' ? 'FAIL' : 'NEEDS_REVIEW',
+          confidence_score: dynamicResult.confidenceScore
+        };
+      });
+
+      if (onApplicationsUpdate) {
+        onApplicationsUpdate(updated);
+      }
+    }
+
     setIsProcessingAI(false);
     setAiProcessingStep('');
 
@@ -136,11 +269,9 @@ export function AdminPortal({
         severity: 'SUCCESS'
       });
     }
-
-    alert('Intelligent Multi-Database Verification Pipeline executed successfully across all registered Ministry datasets!');
   };
 
-  // Handle Application Excel Upload
+  // Handle Student Enrollment Excel Upload
   const handleApplicationFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -151,18 +282,28 @@ export function AdminPortal({
       if (rows && rows.length > 0) {
         const parsedApps = rows.map((r, i) => ({
           ...r,
-          id: r.id || r.Application_ID || r.application_id || `APP-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-          scheme_name: r.scheme_name || r.Scheme_Name || 'National Development Grant Scheme',
-          applicant_name: r.applicant_name || r.Applicant_Name || r.full_name || r.Name || r.name || 'Applicant ' + (i + 1),
-          dob: r.dob || r.Date_of_Birth || r.DOB || '1995-01-01',
+          id: r.id || r.Student_ID || r.student_id || r.Application_ID || `STU-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+          student_name: r.student_name || r.Student_Name || r.applicant_name || r.Applicant_Name || r.full_name || r.Name || 'Student ' + (i + 1),
+          applicant_name: r.student_name || r.Student_Name || r.applicant_name || r.Applicant_Name || r.full_name || r.Name || 'Student ' + (i + 1),
+          apaar_id: r.apaar_id || r.APAAR_ID || r.apaar_no || r.aadhaar_no || '',
+          aadhaar_no: r.apaar_id || r.APAAR_ID || r.apaar_no || r.aadhaar_no || '',
+          enrollment_no: r.enrollment_no || r.Enrollment_No || r.roll_no || r.pan_no || '',
+          pan_no: r.enrollment_no || r.Enrollment_No || r.roll_no || r.pan_no || '',
+          course: r.course || r.Course || r.program || r.degree || 'B.Tech Computer Science and Engineering',
+          branch: r.branch || r.Branch || 'Computer Science',
+          scheme_name: r.course || r.Course || 'B.Tech Computer Science and Engineering',
+          dob: r.dob || r.Date_of_Birth || r.DOB || '2004-01-01',
           gender: r.gender || r.Gender || 'Not Specified',
           father_name: r.father_name || r.Father_Name || '',
-          aadhaar_no: r.aadhaar_no || r.Aadhaar_No || '',
-          pan_no: r.pan_no || r.PAN_No || '',
-          education_roll: r.education_roll || r.Education_Roll || '',
-          claimed_income: r.claimed_income || r.Claimed_Income || '5,00,000',
+          institution_code: r.institution_code || r.Institution_Code || 'IITD',
           state: r.state || r.State || 'Delhi',
-          pin_code: r.pin_code || r.Pin_Code || '110001',
+          pin_code: r.pin_code || r.Pin_Code || '110016',
+          approved_intake: Number(r.approved_intake || r.Approved_Intake || 120),
+          actual_enrolment: Number(r.actual_enrolment || r.Actual_Enrolment || 118),
+          supernumerary_seats: r.supernumerary_seats || r.Supernumerary_Seats || 'NO',
+          nri_category: r.nri_category || r.NRI_Category || 'NO',
+          oci_status: r.oci_status || r.OCI_Status || 'NO',
+          foreign_national: r.foreign_national || r.Foreign_National || 'NO',
           status: 'PENDING_AI_CHECK',
           ai_verdict: 'PENDING',
           confidence_score: 0,
@@ -172,31 +313,39 @@ export function AdminPortal({
         setStagedApplications(parsedApps);
       }
     } catch (err) {
-      alert('Error parsing applications Excel: ' + err.message);
+      alert('Error parsing student enrollment Excel: ' + err.message);
     }
   };
 
-  // Commit Staged Applications
-  const handleCommitApplications = () => {
-    const combined = [...stagedApplications, ...applications];
-    onApplicationsUpdate(combined);
+  // Commit Staged Student Records via API
+  const handleCommitApplications = async () => {
+    if (stagedApplications.length === 0) return;
+
+    try {
+      await submitApplication(stagedApplications);
+    } catch (err) {
+      const combined = [...stagedApplications, ...applications];
+      if (onApplicationsUpdate) {
+        onApplicationsUpdate(combined);
+      }
+    }
 
     if (onLogAudit) {
       onLogAudit({
-        actor: 'Admin User',
-        portal: 'Admin Portal',
-        action: 'SEND_APPLICATION_EXCEL',
-        details: `Submitted new application batch "${uploadedBatchFileName}" containing ${stagedApplications.length} entries. Ready for AI inspection.`,
+        actor: 'APAAR Admin User',
+        portal: 'APAAR Team Portal',
+        action: 'UPLOAD_STUDENT_ENROLLMENT_BATCH',
+        details: `Submitted new student enrollment batch "${uploadedBatchFileName}" containing ${stagedApplications.length} entries. Ready for AICTE APAAR inspection.`,
         severity: 'INFO'
       });
     }
 
-    alert(`Successfully loaded ${stagedApplications.length} applications into the AI verification queue!`);
+    alert(`Successfully loaded ${stagedApplications.length} student records into the APAAR verification queue!`);
     setStagedApplications([]);
     setActiveTab('QUEUE');
   };
 
-  // Add Another Admin
+  // Add Another APAAR Team Member
   const handleAddAdminSubmit = (e) => {
     e.preventDefault();
     if (!newAdmin.name || !newAdmin.email) return;
@@ -205,7 +354,7 @@ export function AdminPortal({
       id: `ADM-0${adminList.length + 1}`,
       name: newAdmin.name,
       email: newAdmin.email,
-      role: newAdmin.roleLevel === 'SUPER_ADMIN' ? 'Platform Administrator' : 'Authorized Reviewer'
+      role: newAdmin.roleLevel === 'SUPER_ADMIN' ? 'APAAR Central Administrator' : 'Institutional Data Reviewer'
     };
 
     setAdminList([...adminList, added]);
@@ -214,46 +363,48 @@ export function AdminPortal({
 
     if (onLogAudit) {
       onLogAudit({
-        actor: 'SuperAdmin (ADM-01)',
-        portal: 'Admin Portal',
-        action: 'ADD_ANOTHER_ADMIN',
-        details: `Created new admin account for ${added.name} (${added.email}) with role [${added.role}].`,
+        actor: 'APAAR Lead (ADM-01)',
+        portal: 'APAAR Team Portal',
+        action: 'ADD_APAAR_MEMBER',
+        details: `Created new APAAR administrative officer account for ${added.name} (${added.email}) with role [${added.role}].`,
         severity: 'INFO'
       });
     }
   };
 
-  // Add Ministry (Only authorized ministries can login)
+  // Add Institution (Only authorized institutions can login)
   const handleAddMinistrySubmit = (e) => {
     e.preventDefault();
     if (!newMinistry.code || !newMinistry.name || !newMinistry.adminEmail) return;
 
     const addedMin = {
-      id: `min-${newMinistry.code.toLowerCase()}`,
+      id: `inst-${newMinistry.code.toLowerCase()}`,
       code: newMinistry.code.toUpperCase(),
       name: newMinistry.name,
-      category: newMinistry.category,
+      category: newMinistry.category || 'AICTE Approved Institution',
       adminEmail: newMinistry.adminEmail,
       status: 'ACTIVE',
       recordsCount: 0,
+      approvedIntake: 600,
+      actualEnrolment: 0,
       lastSync: new Date().toLocaleString()
     };
 
     onMinistriesUpdate([...ministries, addedMin]);
     setShowAddMinistryModal(false);
-    setNewMinistry({ code: '', name: '', category: 'Regulatory Authority', adminEmail: '' });
+    setNewMinistry({ code: '', name: '', category: 'AICTE Approved Institution', adminEmail: '' });
 
     if (onLogAudit) {
       onLogAudit({
-        actor: 'SuperAdmin (ADM-01)',
-        portal: 'Admin Portal',
-        action: 'ADD_MINISTRY',
-        details: `Provisioned authorized ministry portal access for "${addedMin.name}" [Code: ${addedMin.code}]. Allowed login for ${addedMin.adminEmail}.`,
+        actor: 'APAAR Lead (ADM-01)',
+        portal: 'APAAR Team Portal',
+        action: 'ADD_INSTITUTION',
+        details: `Provisioned authorized institution portal access for "${addedMin.name}" [Code: ${addedMin.code}]. Allowed login for ${addedMin.adminEmail}.`,
         severity: 'SUCCESS'
       });
     }
 
-    alert(`Ministry "${addedMin.name}" has been authorized! Only this ministry can now log into the Ministry Portal.`);
+    alert(`Institution "${addedMin.name}" has been authorized! Only this institution can now log into the Institution Portal.`);
   };
 
   return (
@@ -269,24 +420,24 @@ export function AdminPortal({
       }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-            <span className="brand-tag">Central Platform Admin Portal</span>
-            <span className="badge badge-info">Multi-Ministry Oversight</span>
+            <span className="brand-tag">APAAR Team Central Portal</span>
+            <span className="badge badge-info">Multi-Institution Student Oversight</span>
           </div>
-          <h1 style={{ fontSize: '1.85rem' }}>Automated Verification & Compliance Oversight</h1>
+          <h1 style={{ fontSize: '1.85rem' }}>Automated APAAR Student Verification & AICTE Oversight</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-            Autonomous AI Cross-Verification across UIDAI, CBDT, MoE, and MCA Ministry Registries.
+            Autonomous APAAR validation, intake capacity verification, and duplicate enrolment detection across AICTE-approved institutions.
           </p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           <button className="btn-secondary" onClick={() => setShowAddAdminModal(true)}>
             <UserPlus size={16} />
-            Add Another Admin
+            Add APAAR Member
           </button>
 
           <button className="btn-secondary" onClick={() => setShowAddMinistryModal(true)}>
-            <Building2 size={16} color="var(--gov-teal)" />
-            Add Ministry
+            <GraduationCap size={16} color="var(--gov-teal)" />
+            Add Institution
           </button>
 
           <button
@@ -295,7 +446,7 @@ export function AdminPortal({
             disabled={isProcessingAI}
           >
             <Sparkles size={16} />
-            {isProcessingAI ? 'AI Verification Running...' : 'Execute AI Cross-Check on All'}
+            {isProcessingAI ? 'APAAR Verification Running...' : 'Execute APAAR Cross-Check on All'}
           </button>
         </div>
       </div>
@@ -314,8 +465,8 @@ export function AdminPortal({
           className={`tab-btn ${activeTab === 'SEND_APP' ? 'active' : ''}`}
           onClick={() => setActiveTab('SEND_APP')}
         >
-          <Send size={16} />
-          Send Applications
+          <Upload size={16} />
+          Upload Student Records
         </button>
 
         <button
@@ -323,7 +474,7 @@ export function AdminPortal({
           onClick={() => setActiveTab('QUEUE')}
         >
           <Cpu size={16} />
-          Verification Queue ({applications.length})
+          Student Record Queue ({applications.length})
         </button>
 
         <button
@@ -340,15 +491,15 @@ export function AdminPortal({
           style={activeTab === 'FRAUD' ? {} : { color: 'var(--gov-crimson)' }}
         >
           <AlertOctagon size={16} />
-          Fraud Intelligence
+          Anomaly & Duplicate Detection
         </button>
 
         <button
           className={`tab-btn ${activeTab === 'MINISTRIES' ? 'active' : ''}`}
           onClick={() => setActiveTab('MINISTRIES')}
         >
-          <Building2 size={16} />
-          Ministries ({ministries.length})
+          <GraduationCap size={16} />
+          Institutions ({ministries.length})
         </button>
 
         <button
@@ -364,7 +515,7 @@ export function AdminPortal({
           onClick={() => setActiveTab('RULE_STUDIO')}
         >
           <Scale size={16} />
-          Rule Studio ({complianceRules.length})
+          AICTE Rule Studio ({complianceRules.length})
         </button>
 
         <button
@@ -398,7 +549,7 @@ export function AdminPortal({
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div className="pulse-indicator" style={{ width: '14px', height: '14px', background: 'var(--primary)' }}></div>
             <div>
-              <strong style={{ fontSize: '1rem', color: '#fff' }}>GovVerify AI Verification Engine Active</strong>
+              <strong style={{ fontSize: '1rem', color: '#fff' }}>APAAR AICTE Verification Engine Active</strong>
               <p style={{ fontSize: '0.85rem', color: 'var(--primary-light)', marginTop: '0.2rem' }}>
                 {aiProcessingStep}
               </p>
@@ -414,20 +565,20 @@ export function AdminPortal({
           <div className="metrics-grid">
             <div className="glass-panel metric-card">
               <div className="metric-info">
-                <h3>Total Submitted Applications</h3>
+                <h3>Total Student Records</h3>
                 <div className="value">{totalApps}</div>
-                <span className="badge badge-neutral" style={{ marginTop: '0.5rem' }}>All Batches</span>
+                <span className="badge badge-neutral" style={{ marginTop: '0.5rem' }}>AICTE Enrolment Repository</span>
               </div>
               <div className="metric-icon-box">
-                <Send size={24} color="var(--gov-navy)" />
+                <GraduationCap size={24} color="var(--gov-navy)" />
               </div>
             </div>
 
             <div className="glass-panel metric-card border-teal">
               <div className="metric-info">
-                <h3>Verified Authentic</h3>
+                <h3>Verified Authentic Students</h3>
                 <div className="value" style={{ color: 'var(--gov-teal)' }}>{verifiedApps}</div>
-                <span className="badge badge-pass" style={{ marginTop: '0.5rem' }}>100% Cross-Matched</span>
+                <span className="badge badge-pass" style={{ marginTop: '0.5rem' }}>100% APAAR Matched</span>
               </div>
               <div className="metric-icon-box" style={{ borderColor: 'var(--gov-teal)', background: 'var(--gov-white)' }}>
                 <CheckCircle2 size={24} color="var(--gov-teal)" />
@@ -436,9 +587,9 @@ export function AdminPortal({
 
             <div className="glass-panel metric-card border-amber">
               <div className="metric-info">
-                <h3>Needs Human Review</h3>
+                <h3>Pending / Discrepancy</h3>
                 <div className="value" style={{ color: 'var(--gov-amber)' }}>{reviewApps}</div>
-                <span className="badge badge-review" style={{ marginTop: '0.5rem' }}>Audit / Review Flags</span>
+                <span className="badge badge-review" style={{ marginTop: '0.5rem' }}>Intake / Quota Flags</span>
               </div>
               <div className="metric-icon-box" style={{ borderColor: 'var(--gov-amber)', background: 'var(--gov-white)' }}>
                 <AlertTriangle size={24} color="var(--gov-amber)" />
@@ -447,9 +598,9 @@ export function AdminPortal({
 
             <div className="glass-panel metric-card border-crimson">
               <div className="metric-info">
-                <h3>Flagged / Impersonation</h3>
+                <h3>Flagged / Duplicate Enrolment</h3>
                 <div className="value" style={{ color: 'var(--gov-crimson)' }}>{flaggedApps}</div>
-                <span className="badge badge-fail" style={{ marginTop: '0.5rem' }}>Critical Mismatch</span>
+                <span className="badge badge-fail" style={{ marginTop: '0.5rem' }}>Dual Institution / Excess</span>
               </div>
               <div className="metric-icon-box" style={{ borderColor: 'var(--gov-crimson)', background: 'var(--gov-white)' }}>
                 <XCircle size={24} color="var(--gov-crimson)" />
@@ -461,14 +612,14 @@ export function AdminPortal({
           <div className="glass-panel" style={{ padding: '1.75rem', marginBottom: '2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
-                <h2 style={{ fontSize: '1.2rem' }}>Recent Applications & Verification Status</h2>
+                <h2 style={{ fontSize: '1.2rem' }}>Recent Student Records & APAAR Verification Status</h2>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                  Click "View Consolidated Report" on any row to open Page 16 detailed multi-ministry breakdown.
+                  Click "Report" on any row to open the complete academic verification breakdown.
                 </p>
               </div>
 
               <button className="btn-secondary btn-sm" onClick={() => setActiveTab('QUEUE')}>
-                View Complete Queue
+                View Complete Student Queue
                 <ArrowRight size={14} />
               </button>
             </div>
@@ -477,11 +628,11 @@ export function AdminPortal({
               <table className="gov-table">
                 <thead>
                   <tr>
-                    <th>App ID</th>
-                    <th>Applicant Name</th>
-                    <th>Aadhaar Number</th>
-                    <th>PAN Number</th>
-                    <th>Declared State</th>
+                    <th>Student ID</th>
+                    <th>Student Name</th>
+                    <th>APAAR ID</th>
+                    <th>Enrollment No</th>
+                    <th>Institution / State</th>
                     <th>AI Confidence</th>
                     <th>Verdict</th>
                     <th>Actions</th>
@@ -491,10 +642,10 @@ export function AdminPortal({
                   {applications.slice(0, 5).map((app) => (
                     <tr key={app.id}>
                       <td><span className="mono" style={{ fontWeight: 600 }}>{app.id}</span></td>
-                      <td><strong>{app.applicant_name}</strong></td>
-                      <td><span className="mono">{maskAadhaar(app.aadhaar_no)}</span></td>
-                      <td><span className="mono">{maskPAN(app.pan_no)}</span></td>
-                      <td>{app.state}</td>
+                      <td><strong>{app.student_name || app.applicant_name}</strong></td>
+                      <td><span className="mono">{maskAPAAR(app.apaar_id || app.aadhaar_no)}</span></td>
+                      <td><span className="mono">{app.enrollment_no || app.pan_no}</span></td>
+                      <td>{app.institution_code || app.state}</td>
                       <td>
                         <strong>{app.confidence_score || '—'}%</strong>
                       </td>
@@ -511,10 +662,10 @@ export function AdminPortal({
                           <button
                             className="btn-secondary btn-sm"
                             onClick={() => handlePreviewPlan(app)}
-                            title="Preview Dynamic AI Verification Plan"
+                            title="Preview Dynamic AICTE Verification Plan"
                           >
                             <Compass size={13} color="var(--primary-light)" />
-                            AI Plan
+                            Plan
                           </button>
                           <button
                             className="btn-primary btn-sm"
@@ -534,7 +685,7 @@ export function AdminPortal({
         </div>
       )}
 
-      {/* TAB 2: SEND APPLICATION (EXCEL UPLOAD) */}
+      {/* TAB 2: UPLOAD STUDENT ENROLLMENT BATCH */}
       {activeTab === 'SEND_APP' && (
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
           <div className="glass-panel" style={{ padding: '2.5rem', border: '1px solid var(--border-glow)' }}>
@@ -550,13 +701,13 @@ export function AdminPortal({
                 justifyContent: 'center',
                 margin: '0 auto 1rem'
               }}>
-                <Send size={32} color="var(--primary-light)" />
+                <Upload size={32} color="var(--primary-light)" />
               </div>
               <h1 style={{ fontSize: '1.65rem', marginBottom: '0.4rem' }}>
-                Send Application Batch (Excel Ingestion)
+                Upload Student Enrollment Batch (AICTE Ingestion)
               </h1>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '600px', margin: '0 auto' }}>
-                Upload batch applications in Excel format (.xlsx, .xls, .csv). Once uploaded, our Central AI Engine will automatically query each authorized Ministry's database to cross-check Aadhaar, PAN, Name, DOB, and regulatory compliance.
+                Upload post-admission student records in Excel format (.xlsx, .xls, .csv). The AICTE Central APAAR Engine will automatically validate 12-digit APAAR IDs, check against approved intake capacities, verify supernumerary NRI/OCI/FN seats, and detect cross-institution duplicate enrolments.
               </p>
             </div>
 
@@ -570,16 +721,16 @@ export function AdminPortal({
                     onChange={handleApplicationFileUpload}
                   />
                   <Upload size={32} color="var(--primary-light)" style={{ marginBottom: '0.75rem' }} />
-                  <p style={{ fontSize: '1.05rem', fontWeight: 600 }}>Click to browse or drop Application Batch Excel</p>
+                  <p style={{ fontSize: '1.05rem', fontWeight: 600 }}>Click to browse or drop Student Enrollment Excel</p>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                    Expected columns: Application_ID, Applicant_Name, Aadhaar_No, PAN_No, DOB, Father_Name, State
+                    Expected columns: Student_ID, Student_Name, APAAR_ID, Enrollment_No, Course, Branch, Approved_Intake, Actual_Enrolment, NRI_Category, OCI_Status, Foreign_National, Supernumerary_Seats
                   </p>
                 </label>
 
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                   <button className="btn-secondary" onClick={downloadApplicationTemplate}>
                     <Download size={16} />
-                    Download Standard Application Excel Template (.xlsx)
+                    Download Student Enrollment Excel Template (.xlsx)
                   </button>
                 </div>
               </div>
@@ -597,7 +748,7 @@ export function AdminPortal({
                   <div>
                     <strong style={{ color: '#fff' }}>File: {uploadedBatchFileName}</strong>
                     <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                      {stagedApplications.length} valid application records extracted and parsed.
+                      {stagedApplications.length} valid student records extracted and parsed.
                     </p>
                   </div>
 
@@ -607,7 +758,7 @@ export function AdminPortal({
                     </button>
                     <button className="btn-primary btn-sm" onClick={handleCommitApplications}>
                       <CheckCircle2 size={16} />
-                      Send to AI Verification Queue
+                      Send to APAAR Verification Queue
                     </button>
                   </div>
                 </div>
@@ -617,23 +768,30 @@ export function AdminPortal({
                   <table className="gov-table">
                     <thead>
                       <tr>
-                        <th>ID</th>
-                        <th>Applicant Name</th>
-                        <th>Aadhaar</th>
-                        <th>PAN</th>
-                        <th>DOB</th>
-                        <th>State</th>
+                        <th>Student ID</th>
+                        <th>Student Name</th>
+                        <th>APAAR ID</th>
+                        <th>Enrollment No</th>
+                        <th>Course / Branch</th>
+                        <th>Intake & Quotas</th>
                       </tr>
                     </thead>
                     <tbody>
                       {stagedApplications.map((app, idx) => (
                         <tr key={idx}>
                           <td><span className="mono">{app.id}</span></td>
-                          <td><strong>{app.applicant_name}</strong></td>
-                          <td><span className="mono">{maskAadhaar(app.aadhaar_no)}</span></td>
-                          <td><span className="mono">{maskPAN(app.pan_no)}</span></td>
-                          <td>{app.dob}</td>
-                          <td>{app.state}</td>
+                          <td><strong>{app.student_name || app.applicant_name}</strong></td>
+                          <td><span className="mono">{maskAPAAR(app.apaar_id || app.aadhaar_no)}</span></td>
+                          <td><span className="mono">{app.enrollment_no || app.pan_no}</span></td>
+                          <td>{app.course || app.scheme_name}</td>
+                          <td>
+                            <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>
+                              Intake: {app.actual_enrolment || 0}/{app.approved_intake || 0}
+                              {app.nri_category === 'YES' ? ' • NRI' : ''}
+                              {app.oci_status === 'YES' ? ' • OCI' : ''}
+                              {app.foreign_national === 'YES' ? ' • FN' : ''}
+                            </span>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -657,20 +815,42 @@ export function AdminPortal({
             gap: '1rem'
           }}>
             <div>
-              <h2 style={{ fontSize: '1.35rem' }}>Active Application Queue & AI Match Index</h2>
+              <h2 style={{ fontSize: '1.35rem' }}>Active Student Enrollment Queue & APAAR Match Index</h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                AI inspects each application against authorized Ministry reference databases and flags inconsistencies.
+                AICTE Central Engine inspects each submitted student record against national APAAR registries, institutional intake quotas, and cross-college databases.
               </p>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button
+                className="btn-secondary"
+                onClick={handleQuickSendTestRequest}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderColor: '#FF9933', color: 'var(--text-primary)', fontWeight: 600 }}
+                title="Simulate a live student record submission to test real-time WebSocket receipt"
+              >
+                <Send size={15} color="#FF9933" />
+                ⚡ Simulate Live Ingestion
+              </button>
+
+              {onOpenCitizenRequest && (
+                <button
+                  className="btn-secondary"
+                  onClick={onOpenCitizenRequest}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                  title="Open Student / Employer Verification Portal"
+                >
+                  <UserPlus size={15} />
+                  Public Verification Portal
+                </button>
+              )}
+
               <button
                 className="btn-primary"
                 onClick={handleRunBatchVerification}
                 disabled={isProcessingAI}
               >
                 <Cpu size={16} />
-                {isProcessingAI ? 'Running Multi-Dataset AI...' : 'Run AI Cross-Verification'}
+                {isProcessingAI ? 'Running APAAR AI Engine...' : 'Run APAAR Cross-Verification'}
               </button>
             </div>
           </div>
@@ -680,11 +860,12 @@ export function AdminPortal({
               <table className="gov-table">
                 <thead>
                   <tr>
-                    <th>Application ID</th>
-                    <th>Scheme</th>
-                    <th>Applicant Name</th>
-                    <th>Aadhaar Registry</th>
-                    <th>PAN Tax Linkage</th>
+                    <th>Student ID</th>
+                    <th>Program / Branch</th>
+                    <th>Student Name</th>
+                    <th>APAAR ID</th>
+                    <th>Enrollment No</th>
+                    <th>Intake & Quotas</th>
                     <th>AI Confidence</th>
                     <th>Verdict</th>
                     <th>Actions</th>
@@ -695,17 +876,25 @@ export function AdminPortal({
                     <tr key={app.id}>
                       <td><span className="mono" style={{ fontWeight: 700 }}>{app.id}</span></td>
                       <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', maxWidth: '200px' }}>
-                        {app.scheme_name}
+                        {app.course || app.scheme_name}
                       </td>
-                      <td><strong>{app.applicant_name}</strong></td>
+                      <td><strong>{app.student_name || app.applicant_name}</strong></td>
                       <td>
                         <span className="mono" style={{ fontSize: '0.82rem' }}>
-                          {maskAadhaar(app.aadhaar_no)}
+                          {maskAPAAR(app.apaar_id || app.aadhaar_no)}
                         </span>
                       </td>
                       <td>
                         <span className="mono" style={{ fontSize: '0.82rem' }}>
-                          {maskPAN(app.pan_no)}
+                          {app.enrollment_no || app.pan_no}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>
+                          Intake: {app.actual_enrolment || 118}/{app.approved_intake || 120}
+                          {app.nri_category === 'YES' ? ' • NRI' : ''}
+                          {app.oci_status === 'YES' ? ' • OCI' : ''}
+                          {app.foreign_national === 'YES' ? ' • FN' : ''}
                         </span>
                       </td>
                       <td>
@@ -736,13 +925,24 @@ export function AdminPortal({
                       </td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          {(!app.ai_verdict || app.ai_verdict === 'PENDING' || app.status === 'PENDING_AI_CHECK') && (
+                            <button
+                              className="btn-secondary btn-sm"
+                              onClick={() => handleVerifySingle(app.id)}
+                              title="Run autonomous APAAR verification on this student record"
+                              style={{ color: '#f59e0b', borderColor: 'rgba(245, 158, 11, 0.4)' }}
+                            >
+                              <Sparkles size={13} color="#f59e0b" />
+                              Run AI
+                            </button>
+                          )}
                           <button
                             className="btn-secondary btn-sm"
                             onClick={() => handlePreviewPlan(app)}
-                            title="Preview Dynamic AI Verification Plan"
+                            title="Preview Dynamic AICTE Verification Plan"
                           >
                             <Compass size={13} color="var(--primary-light)" />
-                            AI Plan
+                            Plan
                           </button>
                           <button className="btn-primary btn-sm" onClick={() => handleViewReport(app)}>
                             <FileCheck2 size={13} />
@@ -851,7 +1051,7 @@ export function AdminPortal({
         </div>
       )}
 
-      {/* TAB 4: AUTHORIZED MINISTRIES */}
+      {/* TAB 4: AUTHORIZED INSTITUTIONS */}
       {activeTab === 'MINISTRIES' && (
         <div>
           <div style={{
@@ -863,15 +1063,15 @@ export function AdminPortal({
             gap: '1rem'
           }}>
             <div>
-              <h2 style={{ fontSize: '1.35rem' }}>Authorized Ministries & Federated Databases</h2>
+              <h2 style={{ fontSize: '1.35rem' }}>AICTE-Approved Institutions & Student Registries</h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                "joh ministry admin add karega bass wahi ministry login kaar sakengi".
+                Only institutions authorized by the AICTE APAAR Team can log in and submit student enrollment data.
               </p>
             </div>
 
             <button className="btn-primary" onClick={() => setShowAddMinistryModal(true)}>
-              <Building2 size={16} />
-              Add Ministry
+              <GraduationCap size={16} />
+              Add Institution
             </button>
           </div>
 
@@ -891,9 +1091,9 @@ export function AdminPortal({
                       justifyContent: 'center',
                       color: 'var(--primary-light)'
                     }}>
-                      <Building2 size={24} />
+                      <GraduationCap size={24} />
                     </div>
-                    <span className="badge badge-pass">AUTHORIZED</span>
+                    <span className="badge badge-pass">AICTE APPROVED</span>
                   </div>
 
                   <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--primary-light)', fontWeight: 700 }}>
@@ -914,14 +1114,17 @@ export function AdminPortal({
                     color: 'var(--text-secondary)',
                     marginBottom: '1rem'
                   }}>
-                    <div>Nodal Email: <strong style={{ color: '#fff' }}>{min.adminEmail}</strong></div>
+                    <div>Registrar / Nodal Email: <strong style={{ color: '#fff' }}>{min.adminEmail}</strong></div>
                     <div style={{ marginTop: '0.35rem' }}>
-                      Indexed Database Records: <strong style={{ color: 'var(--primary-light)' }}>{recCount} records</strong>
+                      Approved Intake Capacity: <strong style={{ color: 'var(--primary-light)' }}>{min.approvedIntake || 600} seats</strong>
+                    </div>
+                    <div style={{ marginTop: '0.35rem' }}>
+                      Submitted Student Records: <strong style={{ color: 'var(--primary-light)' }}>{recCount} records</strong>
                     </div>
                   </div>
 
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Registry Status: Synchronized for Central AI Discovery
+                    Registry Status: Synchronized for Central APAAR Discovery
                   </div>
                 </div>
               );
@@ -934,9 +1137,9 @@ export function AdminPortal({
       {activeTab === 'RULES' && (
         <div>
           <div style={{ marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.35rem' }}>Authorized Regulatory Compliance Rules</h2>
+            <h2 style={{ fontSize: '1.35rem' }}>AICTE Approved Regulatory Compliance Rules</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-              "Rules authorized administrators configure karenge. AI apni taraf se imaginary government regulations create nahi karega."
+              Statutory admission and APAAR verification rules configured by AICTE administrators.
             </p>
           </div>
 
@@ -1010,10 +1213,13 @@ export function AdminPortal({
           application={applications.find(a => a.id === activeReport.applicationId)}
           onBack={() => setActiveTab('QUEUE')}
           onDecisionSubmit={(decisionData) => {
+            if (onDecisionSubmit) {
+              onDecisionSubmit(decisionData);
+            }
             if (onLogAudit) {
               onLogAudit({
-                actor: 'SuperAdmin (ADM-01)',
-                portal: 'Admin Portal',
+                actor: 'APAAR Team Admin (ADM-01)',
+                portal: 'APAAR Team Portal',
                 action: 'FINAL_AUTHORIZED_DECISION',
                 details: `Recorded decision [${decisionData.decision}] for ${decisionData.applicationId}. Remarks: "${decisionData.notes}"`,
                 severity: decisionData.decision === 'APPROVE' ? 'SUCCESS' : decisionData.decision === 'REJECT' ? 'CRITICAL' : 'WARNING'
@@ -1024,18 +1230,18 @@ export function AdminPortal({
         />
       )}
 
-      {/* Modal: Add Another Admin */}
+      {/* Modal: Add APAAR Team Member */}
       {showAddAdminModal && (
         <div className="modal-overlay" onClick={() => setShowAddAdminModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ fontSize: '1.35rem', marginBottom: '0.4rem' }}>Add Another Platform Admin</h2>
+            <h2 style={{ fontSize: '1.35rem', marginBottom: '0.4rem' }}>Add APAAR Team Member</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-              Provision another administrative officer with central review or super-admin clearance.
+              Provision another administrative officer to the AICTE Central APAAR verification team.
             </p>
 
             <form onSubmit={handleAddAdminSubmit}>
               <div className="form-group">
-                <label className="form-label">Admin Full Name</label>
+                <label className="form-label">Officer Full Name</label>
                 <input
                   type="text"
                   className="form-input"
@@ -1047,11 +1253,11 @@ export function AdminPortal({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Official NIC / Government Email</label>
+                <label className="form-label">Official AICTE / MoE Email</label>
                 <input
                   type="email"
                   className="form-input"
-                  placeholder="e.g. s.kapoor@gov.in"
+                  placeholder="e.g. s.kapoor@aicte-india.org"
                   value={newAdmin.email}
                   onChange={(e) => setNewAdmin({ ...newAdmin, email: e.target.value })}
                   required
@@ -1065,8 +1271,8 @@ export function AdminPortal({
                   value={newAdmin.roleLevel}
                   onChange={(e) => setNewAdmin({ ...newAdmin, roleLevel: e.target.value })}
                 >
-                  <option value="SUPER_ADMIN">Platform Super Admin (Full Control)</option>
-                  <option value="REVIEWER">Authorized Reviewer (Report & Decision Sign-off)</option>
+                  <option value="SUPER_ADMIN">APAAR Central Lead Admin (Full Control)</option>
+                  <option value="REVIEWER">Institutional Data Reviewer (Verification Sign-off)</option>
                 </select>
               </div>
 
@@ -1075,7 +1281,7 @@ export function AdminPortal({
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary">
-                  Authorize Admin Account
+                  Authorize APAAR Officer
                 </button>
               </div>
             </form>
@@ -1083,22 +1289,22 @@ export function AdminPortal({
         </div>
       )}
 
-      {/* Modal: Add Ministry */}
+      {/* Modal: Add Institution */}
       {showAddMinistryModal && (
         <div className="modal-overlay" onClick={() => setShowAddMinistryModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ fontSize: '1.35rem', marginBottom: '0.4rem' }}>Authorize New Ministry Portal Tenant</h2>
+            <h2 style={{ fontSize: '1.35rem', marginBottom: '0.4rem' }}>Authorize New AICTE Institution</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-              Only ministries provisioned here will be allowed to log into the Ministry Client Portal.
+              Only institutions provisioned here will be allowed to log into the Institution Portal and submit student data.
             </p>
 
             <form onSubmit={handleAddMinistrySubmit}>
               <div className="form-group">
-                <label className="form-label">Ministry / Department Code (Uppercase)</label>
+                <label className="form-label">Institution Code (Uppercase)</label>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. MoRTH, MeitY, MoHFW"
+                  placeholder="e.g. IITB, IITK, NITW"
                   value={newMinistry.code}
                   onChange={(e) => setNewMinistry({ ...newMinistry, code: e.target.value })}
                   required
@@ -1106,11 +1312,11 @@ export function AdminPortal({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Full Ministry Name</label>
+                <label className="form-label">Full Institution Name</label>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Ministry of Road Transport and Highways"
+                  placeholder="e.g. Indian Institute of Technology Bombay"
                   value={newMinistry.name}
                   onChange={(e) => setNewMinistry({ ...newMinistry, name: e.target.value })}
                   required
@@ -1122,18 +1328,18 @@ export function AdminPortal({
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Transport & Licensing / Healthcare Registry"
+                  placeholder="e.g. Central University / Deemed University / AICTE Approved College"
                   value={newMinistry.category}
                   onChange={(e) => setNewMinistry({ ...newMinistry, category: e.target.value })}
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Authorized Nodal Officer Email</label>
+                <label className="form-label">Authorized Registrar / Nodal Officer Email</label>
                 <input
                   type="email"
                   className="form-input"
-                  placeholder="e.g. nodal.officer@morth.gov.in"
+                  placeholder="e.g. registrar@iitb.ac.in"
                   value={newMinistry.adminEmail}
                   onChange={(e) => setNewMinistry({ ...newMinistry, adminEmail: e.target.value })}
                   required
@@ -1145,7 +1351,7 @@ export function AdminPortal({
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary">
-                  Register Ministry Access
+                  Register Institution Access
                 </button>
               </div>
             </form>

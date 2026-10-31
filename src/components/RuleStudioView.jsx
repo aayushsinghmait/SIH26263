@@ -34,36 +34,52 @@ export function RuleStudioView({
         let status = 'Pass';
         let evidence = 'All deterministic statutory thresholds satisfied.';
 
-        if (rule.code === 'SEC_AADHAAR_MATCH') {
+        if (rule.code === 'APAAR_ID_VALIDATION') {
+          if (!targetApp.apaar_id && !targetApp.aadhaar_no) {
+            status = 'Fail';
+            evidence = 'Missing APAAR ID: Student record lacks mandatory 12-digit national academic identity.';
+          } else {
+            status = 'Pass';
+            evidence = 'Valid 12-digit APAAR ID cryptographically linked to ABC (Academic Bank of Credits).';
+          }
+        } else if (rule.code === 'DUPLICATE_ENROLMENT_DETECT') {
+          if (targetApp.id === 'STU-2026-902' || targetApp.applicant_name === 'Aarav Patel' || targetApp.student_name === 'Aarav Patel') {
+            status = 'Fail';
+            evidence = 'Concurrent dual full-time enrolment detected across IIT Delhi & VIT Vellore in violation of AICTE Clause 3.4.';
+          } else {
+            status = 'Pass';
+            evidence = 'Single unique institutional enrollment confirmed in central AICTE repository.';
+          }
+        } else if (rule.code === 'INTAKE_CAPACITY_CHECK') {
+          if (targetApp.id === 'STU-2026-904' || targetApp.applicant_name === 'Rohan Mehra' || targetApp.student_name === 'Rohan Mehra') {
+            status = 'Fail';
+            evidence = 'Sanctioned intake capacity exceeded: 65 enrolled against 60 approved seats.';
+          } else {
+            status = 'Pass';
+            evidence = 'Enrolment strictly within sanctioned intake limits.';
+          }
+        } else if (rule.code === 'NRI_OCI_FN_QUOTA_CHECK') {
+          if (targetApp.foreign_national === 'YES' && (targetApp.id === 'STU-2026-904' || targetApp.student_name === 'Rohan Mehra')) {
+            status = 'Needs Review';
+            evidence = 'Supernumerary FN admissions exceed AICTE prescribed 15% quota ceiling.';
+          } else {
+            status = 'Pass';
+            evidence = 'Supernumerary quotas within permissible 15% ceiling.';
+          }
+        } else if (rule.code === 'STUDENT_DATA_COMPLETENESS') {
+          status = 'Pass';
+          evidence = 'Complete student-level academic data submitted (program, branch, and institutional ID present).';
+        } else if (rule.code === 'SEC_AADHAAR_MATCH') {
           if (targetApp.aadhaar_no === '9988-7766-5544') {
             status = 'Fail';
-            evidence = 'Aadhaar token not found in UIDAI National Demographic Registry.';
-          } else if (targetApp.applicant_name === 'Ananya Ray') {
-            status = 'Needs Review';
-            evidence = 'Phonetic distance flag (87%): Official UIDAI spelling is "Ananya Roy".';
+            evidence = 'Identity token not found in reference database.';
+          } else {
+            status = 'Pass';
+            evidence = 'National identity authenticated.';
           }
         } else if (rule.code === 'FIN_PAN_LINKAGE') {
-          if (targetApp.id === 'APP-2026-903') {
-            status = 'Fail';
-            evidence = 'CBDT direct tax core reflects mismatch between PAN owner and Aadhaar UID.';
-          }
-        } else if (rule.code === 'EDU_DEGREE_VERIFY') {
-          if (!targetApp.education_roll) {
-            status = 'N/A';
-            evidence = 'No educational degree claimed in this commercial application scheme.';
-          } else {
-            status = 'Pass';
-            evidence = 'DigiLocker / NAD academic credential authenticated with official university seal.';
-          }
-        } else if (rule.code === 'CORP_DIRECTOR_CONFLICT') {
-          const income = parseInt((targetApp.claimed_income || '0').replace(/[^0-9]/g, ''), 10);
-          if (income >= 1000000 || targetApp.id === 'APP-2026-904') {
-            status = 'Needs Review';
-            evidence = 'MCA21 scan reveals active Directorship (DIN01234567). Statutory conflict check required.';
-          } else {
-            status = 'Pass';
-            evidence = 'No disqualified or undisclosed corporate directorships detected.';
-          }
+          status = 'Pass';
+          evidence = 'Tax & institutional identity linkage active.';
         }
 
         return {

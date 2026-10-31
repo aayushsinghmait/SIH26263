@@ -101,6 +101,71 @@ export const SEMANTIC_DEFINITIONS = {
     aliases: [
       'pin_code', 'pin code', 'pincode', 'pin', 'postal code', 'postal_code', 'zip'
     ]
+  },
+  apaar_id: {
+    canonical: 'apaar_id',
+    label: 'APAAR ID (12-Digit Academic ID)',
+    aliases: [
+      'apaar_id', 'apaar', 'apaar id', 'apaarid', 'apaar_no', 'apaar no', 'apaar number',
+      'one nation one student id', 'abc_id', 'abc id', 'academic id', 'student apaar'
+    ]
+  },
+  institution: {
+    canonical: 'institution',
+    label: 'AICTE Approved Institution',
+    aliases: [
+      'institution', 'institution_code', 'institution_name', 'college', 'college_name',
+      'school', 'university', 'institute', 'aicte_institution', 'institution code'
+    ]
+  },
+  branch: {
+    canonical: 'branch',
+    label: 'Branch / Specialization',
+    aliases: [
+      'branch', 'department', 'discipline', 'specialization', 'stream', 'engineering branch'
+    ]
+  },
+  approved_intake: {
+    canonical: 'approved_intake',
+    label: 'AICTE Approved Intake Capacity',
+    aliases: [
+      'approved_intake', 'approved intake', 'sanctioned_intake', 'sanctioned intake', 'intake capacity', 'total intake'
+    ]
+  },
+  actual_enrolment: {
+    canonical: 'actual_enrolment',
+    label: 'Actual Student Enrolment',
+    aliases: [
+      'actual_enrolment', 'actual enrolment', 'actual_enrollment', 'actual enrollment', 'enrolled_count'
+    ]
+  },
+  supernumerary: {
+    canonical: 'supernumerary',
+    label: 'Supernumerary Seats Quota',
+    aliases: [
+      'supernumerary_seats', 'supernumerary', 'supernumerary quota', 'supernumerary seats', 'supernumerary status'
+    ]
+  },
+  nri_category: {
+    canonical: 'nri_category',
+    label: 'NRI Category Status',
+    aliases: [
+      'nri_category', 'nri', 'nri_status', 'nri category', 'nri quota'
+    ]
+  },
+  oci_status: {
+    canonical: 'oci_status',
+    label: 'Overseas Citizen of India (OCI) Status',
+    aliases: [
+      'oci_status', 'oci', 'overseas citizen of india', 'oci status'
+    ]
+  },
+  foreign_national: {
+    canonical: 'foreign_national',
+    label: 'Foreign National (FN) Quota Status',
+    aliases: [
+      'foreign_national', 'fn', 'foreign national', 'fn_status', 'fn category'
+    ]
   }
 };
 

@@ -12,66 +12,66 @@ export function FraudIntelligenceView({ applications = [], databases = {}, onFre
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIncident, setSelectedIncident] = useState(null);
 
-  // Synthesize realistic cross-ministry fraud signals
+  // Synthesize realistic cross-institution APAAR and AICTE enrolment anomaly signals
   const fraudIncidents = [
     {
       id: 'INC-2026-081',
-      applicationId: 'APP-2026-903',
-      applicantName: 'Vikram Singh',
-      threatType: 'SYNTHETIC_AADHAAR_COLLISION',
+      applicationId: 'STU-2026-902',
+      applicantName: 'Aarav Patel',
+      threatType: 'DUPLICATE_CROSS_INSTITUTION_ENROLMENT',
       severity: 'CRITICAL',
       detectedDate: '2026-10-23 13:46:12',
-      aadhaarNo: '9988-7766-5544',
-      panNo: 'XYZPS9876K',
-      description: 'Submitted Aadhaar number has zero matching biometric ledger entries in UIDAI registry. Linked PAN is registered to an unrelated individual in CBDT core.',
-      conflictingMinistries: ['UIDAI', 'CBDT'],
-      riskScore: 94,
+      aadhaarNo: '4567-8901-2345',
+      panNo: '2026/EE/102',
+      description: 'Critical Anomaly: Student APAAR ID (4567-8901-2345) is simultaneously active in full-time B.Tech programs at IIT Delhi (IITD) and VIT Vellore (VIT), violating AICTE dual enrolment regulations.',
+      conflictingMinistries: ['IITD', 'VIT'],
+      riskScore: 98,
       status: 'UNDER_ACTIVE_INVESTIGATION',
       evidenceVector: {
-        submittedName: 'Vikram Singh',
-        uidaiMatch: 'NO_RECORD_FOUND',
-        cbdtRegisteredName: 'Smt. Kamla Devi',
-        panAadhaarLinkStatus: 'MISMATCH_CRITICAL'
+        submittedName: 'Aarav Patel',
+        primaryEnrollment: 'IIT Delhi (B.Tech EE) - Active',
+        secondaryEnrollment: 'VIT Vellore (B.Tech ECE) - Active',
+        duplicateStatus: 'CONCURRENT_FULL_TIME_BREACH'
       }
     },
     {
       id: 'INC-2026-082',
-      applicationId: 'APP-2026-902',
-      applicantName: 'Ananya Ray',
-      threatType: 'PHONETIC_IDENTITY_SPOOF',
+      applicationId: 'STU-2026-904',
+      applicantName: 'Rohan Mehra',
+      threatType: 'SANCTIONED_INTAKE_BREACH_AND_QUOTA_OVERAGE',
       severity: 'HIGH',
       detectedDate: '2026-10-23 11:33:04',
-      aadhaarNo: '2345-6789-0123',
-      panNo: 'BKAPR4321Q',
-      description: 'Phonetic distance flag: Submitted name "Ananya Ray" differs from official UIDAI & CBDT legal spelling "Ananya Roy" (Jaro-Winkler distance 87%).',
-      conflictingMinistries: ['UIDAI', 'MoE'],
-      riskScore: 68,
-      status: 'VERIFICATION_HOLD',
+      aadhaarNo: '6789-0123-4567',
+      panNo: '2026/ME/055',
+      description: 'Intake Capacity Violation: Actual enrolment (65 students) exceeds approved AICTE intake (60 seats) in Mechanical Engineering at VIT. Supernumerary FN admissions exceed the 15% quota ceiling.',
+      conflictingMinistries: ['VIT', 'AICTE_CENTRAL'],
+      riskScore: 84,
+      status: 'REGULATORY_SHOW_CAUSE_ISSUED',
       evidenceVector: {
-        submittedName: 'Ananya Ray',
-        uidaiMatch: 'Ananya Roy (87.2% Match)',
-        cbdtRegisteredName: 'Ananya Roy',
-        panAadhaarLinkStatus: 'VALID_UNDER_VARIATION'
+        submittedName: 'Rohan Mehra',
+        sanctionedIntake: '60 Seats',
+        actualEnrolled: '65 Students (5 Excess)',
+        quotaStatus: 'FN_QUOTA_CEILING_EXCEEDED'
       }
     },
     {
       id: 'INC-2026-083',
-      applicationId: 'APP-2026-904',
-      applicantName: 'Priya Sharma',
-      threatType: 'INCOME_DISCREPANCY_AND_DIRECTOR_CONFLICT',
+      applicationId: 'STU-2026-903',
+      applicantName: 'Vikram Singh',
+      threatType: 'SYNTHETIC_OR_UNSEEDED_APAAR_ID',
       severity: 'HIGH',
       detectedDate: '2026-10-23 15:21:40',
-      aadhaarNo: '5544-3322-1100',
-      panNo: 'PQRSS6543M',
-      description: 'Applicant claimed gross income ₹8,00,000 for low-income subsidy, but CBDT audit ledger indicates gross receipts ₹25L-50L. Automatic expansion detected active Directorship in Apex Horizon Capital LLP.',
-      conflictingMinistries: ['CBDT', 'MCA'],
-      riskScore: 82,
-      status: 'STATUTORY_INQUIRY_ISSUED',
+      aadhaarNo: '9988-7766-5544',
+      panNo: '2026/ME/112',
+      description: 'Unseeded Academic Identity: Submitted APAAR ID has no cryptographic match in the National Academic Depository (NAD/DigiLocker) and does not map to any recognized school or intermediate board.',
+      conflictingMinistries: ['AICTE_CENTRAL', 'NAD_ABC'],
+      riskScore: 91,
+      status: 'VERIFICATION_HOLD',
       evidenceVector: {
-        submittedName: 'Priya Sharma',
-        claimedIncome: '₹8,00,000 (Subsidy Tier)',
-        cbdtIncomeSlab: '₹25,00,000 - ₹50,00,000 [AUDIT_FLAGGED]',
-        mcaDirectorship: 'DIN01234567 • Apex Horizon Capital LLP'
+        submittedName: 'Vikram Singh',
+        apaarStatus: 'UNSEEDED_IN_CENTRAL_REGISTRY',
+        academicLedger: 'NO_BOARD_EXAM_LINKAGE',
+        actionRequired: 'MANDATORY_INSTITUTIONAL_AUDIT'
       }
     }
   ];
@@ -90,16 +90,16 @@ export function FraudIntelligenceView({ applications = [], databases = {}, onFre
   const handleExportFraudReport = () => {
     const rows = filteredIncidents.map(inc => ({
       Incident_ID: inc.id,
-      Application_ID: inc.applicationId,
-      Applicant_Name: inc.applicantName,
+      Student_ID: inc.applicationId,
+      Student_Name: inc.applicantName,
       Threat_Classification: inc.threatType,
       Severity: inc.severity,
       Risk_Score: inc.riskScore,
-      Ministries_Involved: inc.conflictingMinistries.join(', '),
+      Institutions_Involved: inc.conflictingMinistries.join(', '),
       Status: inc.status,
       Description: inc.description
     }));
-    exportToExcel(rows, 'GovVerify_Fraud_Intelligence_Dossier.xlsx', 'ThreatDossier');
+    exportToExcel(rows, 'AICTE_APAAR_Enrolment_Anomaly_Dossier.xlsx', 'AnomalyDossier');
   };
 
   return (
@@ -129,17 +129,17 @@ export function FraudIntelligenceView({ applications = [], databases = {}, onFre
             marginBottom: '0.5rem'
           }}>
             <ShieldAlert size={14} />
-            Page 4 • Forensics & Anti-Impersonation Intelligence
+            AICTE Forensics & Anomaly Intelligence
           </div>
-          <h1 style={{ fontSize: '1.85rem' }}>Cross-Ministry Fraud & Synthetic Identity Hub</h1>
+          <h1 style={{ fontSize: '1.85rem' }}>AICTE Duplicate Enrolment & Intake Anomaly Hub</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.2rem' }}>
-            Automated detection of identity ghosting, phonetic permutation evasions, duplicate Aadhaar collisions, and income falsification.
+            Automated detection of concurrent dual enrolments across colleges, unseeded APAAR IDs, and excess admissions breaching approved intake capacities.
           </p>
         </div>
 
         <button className="btn-secondary" onClick={handleExportFraudReport}>
           <Download size={16} />
-          Export Intelligence Dossier (.xlsx)
+          Export Anomaly Dossier (.xlsx)
         </button>
       </div>
 
@@ -147,7 +147,7 @@ export function FraudIntelligenceView({ applications = [], databases = {}, onFre
       <div className="metrics-grid" style={{ marginBottom: '2rem' }}>
         <div className="glass-panel metric-card">
           <div className="metric-info">
-            <h3>Active Fraud Vectors</h3>
+            <h3>Active Enrolment Anomalies</h3>
             <div className="value" style={{ color: '#f87171' }}>{fraudIncidents.length}</div>
             <span className="badge badge-fail" style={{ marginTop: '0.5rem' }}>Automated Quarantine</span>
           </div>
@@ -158,9 +158,9 @@ export function FraudIntelligenceView({ applications = [], databases = {}, onFre
 
         <div className="glass-panel metric-card">
           <div className="metric-info">
-            <h3>Synthetic Identity Collisions</h3>
+            <h3>Cross-College Duplicate Enrolments</h3>
             <div className="value" style={{ color: '#fbbf24' }}>1</div>
-            <span className="badge badge-review" style={{ marginTop: '0.5rem' }}>Unregistered UIDAI Token</span>
+            <span className="badge badge-review" style={{ marginTop: '0.5rem' }}>Dual Institution Flag</span>
           </div>
           <div className="metric-icon-box" style={{ borderColor: 'var(--warning-border)', background: 'var(--warning-bg)' }}>
             <Fingerprint size={24} color="#fbbf24" />
@@ -169,9 +169,9 @@ export function FraudIntelligenceView({ applications = [], databases = {}, onFre
 
         <div className="glass-panel metric-card">
           <div className="metric-info">
-            <h3>Phonetic Spoofing Attempts</h3>
+            <h3>Sanctioned Intake Breaches</h3>
             <div className="value" style={{ color: 'var(--accent)' }}>1</div>
-            <span className="badge badge-neutral" style={{ marginTop: '0.5rem' }}>Levenshtein &gt;= 80% Flag</span>
+            <span className="badge badge-neutral" style={{ marginTop: '0.5rem' }}>Capacity Overrun</span>
           </div>
           <div className="metric-icon-box" style={{ borderColor: 'rgba(56, 189, 248, 0.3)', background: 'rgba(56, 189, 248, 0.1)' }}>
             <UserX size={24} color="var(--accent)" />
@@ -180,9 +180,9 @@ export function FraudIntelligenceView({ applications = [], databases = {}, onFre
 
         <div className="glass-panel metric-card">
           <div className="metric-info">
-            <h3>Prevented Fiscal Leakage</h3>
-            <div className="value" style={{ color: '#34d399' }}>₹24.5L</div>
-            <span className="badge badge-pass" style={{ marginTop: '0.5rem' }}>Subsidies Protected</span>
+            <h3>Protected Sanctioned Seats</h3>
+            <div className="value" style={{ color: '#34d399' }}>1,840</div>
+            <span className="badge badge-pass" style={{ marginTop: '0.5rem' }}>Intake Integrity Maintained</span>
           </div>
           <div className="metric-icon-box" style={{ borderColor: 'var(--success-border)', background: 'var(--success-bg)' }}>
             <ShieldCheck size={24} color="#34d399" />

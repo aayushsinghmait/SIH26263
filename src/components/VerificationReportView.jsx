@@ -2,17 +2,17 @@ import React, { useState } from 'react';
 import { 
   FileCheck2, Download, FileSpreadsheet, ShieldAlert, CheckCircle2, 
   XCircle, AlertTriangle, ArrowLeft, Building2, UserCheck, Scale, History,
-  FileText, Check, X, HelpCircle
+  FileText, Check, X, HelpCircle, GraduationCap
 } from 'lucide-react';
 import { generateVerificationPDF, exportToExcel } from '../utils/excelHelper';
-import { maskAadhaar, maskPAN } from '../utils/aiEngine';
+import { maskAadhaar, maskPAN, maskAPAAR } from '../utils/aiEngine';
 
 export function VerificationReportView({ report, application, onBack, onDecisionSubmit }) {
   const [reviewerDecision, setReviewerDecision] = useState(
     report.reviewerRecommendation?.action || 'APPROVE'
   );
   const [reviewerNotes, setReviewerNotes] = useState(
-    'Identity verified across central databases. All statutory parameters satisfy regulatory guidelines.'
+    'Student academic credentials and APAAR ID verified against AICTE central repository and institutional intake.'
   );
   const [decisionSaved, setDecisionSaved] = useState(false);
 
@@ -60,7 +60,7 @@ export function VerificationReportView({ report, application, onBack, onDecision
       }}>
         <button className="btn-secondary" onClick={onBack}>
           <ArrowLeft size={16} />
-          Back to Applications Queue
+          Back to Student Queue
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -103,14 +103,14 @@ export function VerificationReportView({ report, application, onBack, onDecision
               textTransform: 'uppercase',
               marginBottom: '0.75rem'
             }}>
-              <FileCheck2 size={14} />
-              Page 16 • Consolidated AI Verification Report
+              <GraduationCap size={14} />
+              AICTE Consolidated Student Verification Report
             </div>
             <h1 style={{ fontSize: '1.85rem', marginBottom: '0.5rem', color: 'var(--gov-navy)' }}>
-              Application #{report.applicationId}
+              Student Record #{report.applicationId}
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-              Scheme: <strong style={{ color: 'var(--gov-navy)' }}>{application?.scheme_name || 'Central Grant Scheme'}</strong>
+              Program: <strong style={{ color: 'var(--gov-navy)' }}>{application?.course || application?.scheme_name || 'B.Tech Program'}</strong>
             </p>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
               Audit Trace Reference: <span className="mono">{report.verifiedAt}</span>
@@ -135,11 +135,11 @@ export function VerificationReportView({ report, application, onBack, onDecision
               fontWeight: 800,
               letterSpacing: '-0.02em',
               marginBottom: '0.35rem',
-              color: report.overallVerdict === 'PASS' ? 'var(--gov-teal)' : report.overallVerdict === 'FAIL' ? 'var(--gov-crimson)' : 'var(--gov-amber)'
+              color: (report.overallVerdict === 'PASS' || report.overallVerdict === 'PASSED') ? 'var(--gov-teal)' : (report.overallVerdict === 'FAIL' || report.overallVerdict === 'MISMATCH_DETECTED') ? 'var(--gov-crimson)' : 'var(--gov-amber)'
             }}>
-              {report.overallVerdict === 'PASS' && 'PASS'}
-              {report.overallVerdict === 'FAIL' && 'FAIL'}
-              {report.overallVerdict === 'NEEDS_REVIEW' && 'NEEDS REVIEW'}
+              {(report.overallVerdict === 'PASS' || report.overallVerdict === 'PASSED') && 'FAIL / NOT FOUND' !== report.overallVerdict && (report.confidenceScore >= 80 ? 'PASS' : 'FAIL')}
+              {(report.overallVerdict === 'FAIL' || report.overallVerdict === 'MISMATCH_DETECTED') && 'FAIL'}
+              {(report.overallVerdict === 'NEEDS_REVIEW' || report.overallVerdict === 'MANUAL_REVIEW_REQUIRED') && 'NEEDS REVIEW'}
             </div>
             <div style={{
               display: 'inline-flex',
@@ -157,7 +157,7 @@ export function VerificationReportView({ report, application, onBack, onDecision
         <div style={{ marginBottom: '2.5rem' }}>
           <h2 style={{ fontSize: '1.15rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <UserCheck size={18} color="var(--primary-light)" />
-            1. Applicant Summary & Queried Reference Registries
+            1. Student Academic Profile & Queried Institutional Registries
           </h2>
           
           <div style={{
@@ -172,7 +172,7 @@ export function VerificationReportView({ report, application, onBack, onDecision
               background: 'rgba(255, 255, 255, 0.02)',
               border: '1px solid var(--border-subtle)'
             }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Applicant Legal Name</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Student Legal Name</span>
               <p style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '0.2rem' }}>{report.applicantName}</p>
               <div style={{ marginTop: '0.6rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 DOB: <strong style={{ color: '#fff' }}>{application?.dob || 'N/A'}</strong> • Gender: <strong style={{ color: '#fff' }}>{application?.gender || 'N/A'}</strong>
@@ -188,15 +188,18 @@ export function VerificationReportView({ report, application, onBack, onDecision
               background: 'rgba(255, 255, 255, 0.02)',
               border: '1px solid var(--border-subtle)'
             }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Identity & Tax Coordinates</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>National Academic Coordinates</span>
               <p style={{ fontSize: '0.95rem', fontWeight: 600, marginTop: '0.2rem' }}>
-                Aadhaar: <span className="mono">{maskAadhaar(application?.aadhaar_no)}</span>
+                APAAR ID: <span className="mono">{maskAPAAR(application?.apaar_id || application?.aadhaar_no)}</span>
               </p>
               <p style={{ fontSize: '0.95rem', fontWeight: 600, marginTop: '0.3rem' }}>
-                PAN: <span className="mono">{maskPAN(application?.pan_no)}</span>
+                Enrollment No: <span className="mono">{application?.enrollment_no || application?.pan_no}</span>
               </p>
               <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Declared Income: <strong>₹{application?.claimed_income || 'N/A'}</strong>
+                Institution: <strong style={{ color: '#fff' }}>{application?.institution_code || application?.state || 'IITD'}</strong> • Branch: <strong style={{ color: '#fff' }}>{application?.branch || 'Engineering'}</strong>
+              </div>
+              <div style={{ marginTop: '0.3rem', fontSize: '0.78rem', color: 'var(--primary-light)' }}>
+                Intake: {application?.actual_enrolment || 118}/{application?.approved_intake || 120} • NRI: {application?.nri_category || 'NO'} • OCI: {application?.oci_status || 'NO'} • FN: {application?.foreign_national || 'NO'}
               </div>
             </div>
 
@@ -330,9 +333,10 @@ export function VerificationReportView({ report, application, onBack, onDecision
                           {ev.status === 'MISMATCH_DETECTED' && <span className="badge badge-fail">MISMATCH</span>}
                           {ev.status === 'MANUAL_REVIEW_REQUIRED' && <span className="badge badge-review">NEEDS REVIEW</span>}
                           {ev.status === 'NO_MATCHING_RECORD' && <span className="badge badge-warning">NO RECORD</span>}
+                          {ev.status === 'INGESTED' && <span className="badge badge-neutral">FORM METADATA</span>}
                           {ev.status === 'SOURCE_UNAVAILABLE' && <span className="badge badge-neutral">UNAVAILABLE</span>}
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                            Confidence: <strong>{ev.matchConfidence}%</strong>
+                            Confidence: <strong>{ev.matchConfidence !== null && ev.matchConfidence !== undefined ? `${ev.matchConfidence}%` : 'N/A'}</strong>
                           </span>
                         </div>
                       </td>
